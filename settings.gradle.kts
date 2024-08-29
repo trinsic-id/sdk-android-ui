@@ -19,5 +19,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "trinsic-android-ui"
-include(":sample")
+include(":testbed")
 include(":library")

@@ -38,4 +38,4 @@ See the [library's page on Jitpack](https://jitpack.io/#trinsic-id/sdk-android-u
 
 ## Usage
 
-Coming soon -- see sample app for example usage
+Coming soon -- see `testbed` app for example usage

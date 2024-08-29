@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "id.trinsic.android_sample"
+    namespace = "id.trinsic.android_testbed"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "id.trinsic.android_sample"
+        applicationId = "id.trinsic.android_testbed"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

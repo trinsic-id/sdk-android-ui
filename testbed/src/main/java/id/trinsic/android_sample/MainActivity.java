@@ -1,4 +1,4 @@
-package id.trinsic.android_sample;
+package id.trinsic.android_testbed;
 
 import android.os.Bundle;
 
@@ -10,7 +10,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
 
-import id.trinsic.android_sample.databinding.ActivityMainBinding;
+import id.trinsic.android_testbed.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
     private ActivityMainBinding binding;

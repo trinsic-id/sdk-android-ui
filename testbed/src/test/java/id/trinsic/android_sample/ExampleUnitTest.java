@@ -1,4 +1,4 @@
-package id.trinsic.android_sample;
+package id.trinsic.android_testbed;
 
 import org.junit.Test;
 

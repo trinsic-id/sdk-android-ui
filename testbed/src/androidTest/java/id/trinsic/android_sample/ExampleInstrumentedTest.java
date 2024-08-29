@@ -1,4 +1,4 @@
-package id.trinsic.android_sample;
+package id.trinsic.android_testbed;
 
 import android.content.Context;
 
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
     public void useAppContext() {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        assertEquals("id.trinsic.android_sample", appContext.getPackageName());
+        assertEquals("id.trinsic.android_testbed", appContext.getPackageName());
     }
 }
