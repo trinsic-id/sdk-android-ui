@@ -21,13 +21,6 @@ import java.util.List;
  * This activity then invokes the `InvokeActivity`, which -- when done with the right intent flags -- will close out both the custom tab activity and this activity.
  */
 public class CallbackActivity extends ComponentActivity {
-    private ActivityResultLauncher<Uri> customTabLauncher;
-    private String launchUrl;
-    private String sessionId;
-    private String redirectScheme;
-    private final Handler handler = new Handler();
-    private Runnable r;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
