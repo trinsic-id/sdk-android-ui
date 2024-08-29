@@ -4,7 +4,6 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
-import android.util.Log;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResultCallback;
@@ -18,24 +17,28 @@ public class InvokeActivity extends ComponentActivity {
     private String launchUrl;
     private String sessionId;
     private String redirectScheme;
-    private final Handler handler = new Handler();
-    private Runnable r;
+    private final Handler sessionCanceledCallbackHandler = new Handler();
+    private Runnable sessionCanceledCallbackRunnable;
 
+    /**
+     * This is called when the activity is first created, which is (almost always) when the session is being launched.
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Log.i("InvokeActivity", "InvokeActivity launched");
-
-        // Register for Custom Tabs activity result -- this indicates the user closing the tab themselves (canceling)
+        // Register for Custom Tabs activity result -- to catch the user closing the tab themselves (canceling) instead of finalizing the session
         customTabLauncher = registerForActivityResult(new CustomTabContract(),
         new ActivityResultCallback<Uri>() {
             @Override
             public void onActivityResult(Uri o) {
-                Log.i("InvokeActivity", "Got onActivityResult");
+                // HACK: On a *successful* completion, the Custom Tab activity will be finalized, triggering this method (which is also triggered when the user manually cancels out of the Custom Tab).
+                // Immediately after, `onNewIntent` will be triggered with the results of the session from `CallbackActivity`.
+                // On an *unsuccessful* completion, this method will be triggered indistinguishably from a successful completion, except `onNewIntent` will *not* fire afterwards.
+                // Therefore, to determine if this callback represents a cancellation or a success, we set a timeout for 20ms (which triggers the cancelation flow), and cancel the timeout if `onNewIntent` is called. 
                 if (r == null) {
-                    r = InvokeActivity.this::sessionCanceledCallback;
-                    handler.postDelayed(r, 100);
+                    sessionCanceledCallbackRunnable = InvokeActivity.this::sessionCanceledCallback;
+                    sessionCanceledCallbackHandler.postDelayed(sessionCanceledCallbackRunnable, 20);
                 }
             }
         });
@@ -43,12 +46,20 @@ public class InvokeActivity extends ComponentActivity {
         handleInitializingIntent(getIntent());
     }
 
+    /**
+     * This is called when the activity is already alive, but is being re-invoked with a new intent.
+     * 
+     * Specifically, this occurs when the `CallbackActivity` invokes this activity with the results of the session.
+     */
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         handleInitializingIntent(intent);
     }
 
+    /**
+     * Handle the intent that was used to launch this activity -- either a launch intent or a callback intent.
+     */
     private void handleInitializingIntent(Intent intent) {
         if(intent.getAction() == null) {
             finishAndRemoveTask();
@@ -60,6 +71,9 @@ public class InvokeActivity extends ComponentActivity {
         }
     }
 
+    /**
+     * Handle a launch/invocation intent -- launch the Custom Tab with the provided URL.
+     */
     private void handleInvokeIntent(Intent intent) {
         launchUrl = intent.getStringExtra("launchUrl");
         sessionId = intent.getStringExtra("sessionId");
@@ -69,8 +83,10 @@ public class InvokeActivity extends ComponentActivity {
         customTabLauncher.launch(uri);
     }
 
+    /*
+     * Handle a callback intent -- return the results of the session to the activity which invoked this one.
+     */
     private void handleCallbackIntent(Intent intent) {
-        Log.i("InvokeActivity", "handleResultsIntent called");
         if(!intent.hasExtra("sessionId") || !intent.hasExtra("success")) {
             return;
         }
@@ -83,10 +99,13 @@ public class InvokeActivity extends ComponentActivity {
         handleResult(sessionId, resultsAccessKey, success, canceled);
     }
 
+    /**
+     * Handle results of the session (either a )
+     */
     private void handleResult(String sessionId, String resultsAccessKey, boolean success, boolean canceled) {
-        Log.i("InvokeActivity", "handleResult() called");
-        if (r != null) {
-            handler.removeCallbacks(r);
+        // Clear cancelation callback if it still exists (see comments in `onCreate()` for context)
+        if (sessionCanceledCallbackRunnable != null) {
+            sessionCanceledCallbackHandler.removeCallbacks(r);
         }
 
         int resultCode = canceled ? RESULT_CANCELED : (success ? RESULT_OK : 2); // TODO: magic error number
@@ -101,6 +120,11 @@ public class InvokeActivity extends ComponentActivity {
         finishAndRemoveTask();
     }
 
+    /**
+     * Called by `sessionCanceledCallbackHandler` after a timeout (which is started when the Custom Tab activity finishes) to detect session cancelation.
+     * 
+     * See comments in `onCreate()` for context.
+     */
     private void sessionCanceledCallback() {
         handleResult(sessionId, null, false, true);
     }
