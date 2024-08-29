@@ -17,7 +17,7 @@ public class InvokeContract extends ActivityResultContract<AcceptanceSessionLaun
 {
     @NonNull
     @Override
-    public Indfdftent createIntent(@NonNull Context context, AcceptanceSessionLaunchParams input) {
+    public Intent createIntent(@NonNull Context context, AcceptanceSessionLaunchParams input) {
         Intent intent = new Intent(context, InvokeActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.setAction(InvokeActivity.ACTION_INVOKE);
