@@ -12,6 +12,14 @@ import androidx.activity.result.ActivityResultLauncher;
 
 import java.util.List;
 
+/**
+ * Activity that handles the redirect from the Acceptance Session.
+ * 
+ * The Custom Tab will launch this activity when the redirect to the user-provided redirect scheme occurs, 
+ * assuming the customer has properly added this activity to their android manifest and configured the scheme/redirect URL appropriately.
+ * 
+ * This activity then invokes the `InvokeActivity`, which -- when done with the right intent flags -- will close out both the custom tab activity and this activity.
+ */
 public class CallbackActivity extends ComponentActivity {
     private ActivityResultLauncher<Uri> customTabLauncher;
     private String launchUrl;
@@ -24,12 +32,9 @@ public class CallbackActivity extends ComponentActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Log.i("CallbackActivity", "CallbackActivity launched");
-
         Intent intent = getIntent();
         Uri data = intent.getData();
         if (data == null) {
-            Log.i("CallbackActivity", "intent has no data");
             return;
         }
 
@@ -39,15 +44,15 @@ public class CallbackActivity extends ComponentActivity {
 
         Intent callbackIntent = new Intent(this, InvokeActivity.class);
         callbackIntent.setAction(InvokeActivity.ACTION_CALLBACK);
+
+        // Use SINGLE_TOP to try to latch onto the InvokeActivity if it's the top of an existing task (assuming we're in a different task),
+        // and CLEAR_TOP to try to latch onto the InvokeActivity if it's somewhere under this current activity (assuming we're in the same task).
         callbackIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         callbackIntent.putExtra("sessionId", sessionId);
         callbackIntent.putExtra("resultsAccessKey", resultsAccessKey);
         callbackIntent.putExtra("success", success);
         callbackIntent.putExtra("canceled", false);
-
-        ActivityManager mngr = (ActivityManager) getSystemService( ACTIVITY_SERVICE );
-        List<ActivityManager.AppTask> taskList = mngr.getAppTasks();
-
         startActivity(callbackIntent);
+        finish(); // Shouldn't be necessary but just in case
     }
 }

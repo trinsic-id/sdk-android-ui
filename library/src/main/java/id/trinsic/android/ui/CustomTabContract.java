@@ -9,6 +9,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.browser.customtabs.CustomTabsIntent;
 
+/**
+ * This class is used to handle the invocation and result-processing of a Custom Tab.
+ */
 class CustomTabContract extends ActivityResultContract<Uri, Uri>
 {
     @NonNull

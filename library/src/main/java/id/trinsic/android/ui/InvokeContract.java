@@ -11,7 +11,9 @@ import id.trinsic.android.ui.models.AcceptanceSessionLaunchParams;
 import id.trinsic.android.ui.models.AcceptanceSessionResult;
 
 /**
- * Internal class for Trinsic SDK usage
+ * Internal class for Trinsic SDK usage.
+ * 
+ * This class is used to handle the invocation and result-processing of `InvokeActivity`, which launches the actual Custom Tab activity.
  */
 public class InvokeContract extends ActivityResultContract<AcceptanceSessionLaunchParams, AcceptanceSessionResult>
 {
@@ -19,6 +21,8 @@ public class InvokeContract extends ActivityResultContract<AcceptanceSessionLaun
     @Override
     public Intent createIntent(@NonNull Context context, AcceptanceSessionLaunchParams input) {
         Intent intent = new Intent(context, InvokeActivity.class);
+
+        // TODO: Is SINGLE_TOP necessary for this intent? I think it's only necessary for the callback intent. -JCC 8/28/24
         intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.setAction(InvokeActivity.ACTION_INVOKE);
         intent.putExtra("sessionId", input.getSessionId());
