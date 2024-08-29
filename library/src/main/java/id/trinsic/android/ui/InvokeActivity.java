@@ -4,21 +4,51 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 public class InvokeActivity extends ComponentActivity {
+    /**
+     * The "invoke" action signals that this activity should launch a Custom Tab to launch the session
+     * when the activity is launched
+     */
     public static String ACTION_INVOKE = "invoke";
+
+    /**
+     * The "callback" action signals that this activity is being re-invoked by `CallbackActivity`
+     * with the session results
+     */
     public static String ACTION_CALLBACK = "callback";
 
+    /**
+     * Activity launcher / result handler for the Custom Tab activity
+     */
     private ActivityResultLauncher<Uri> customTabLauncher;
-    private String launchUrl;
-    private String sessionId;
-    private String redirectScheme;
+
+    /**
+     * Session canceled callback handler -- used to call `sessionCanceledCallbackRunnable` after
+     * a delay.
+     * See comments in `onCreate()` for context
+     */
     private final Handler sessionCanceledCallbackHandler = new Handler();
+
+    /**
+     * Session canceled callback -- always points to `sessionCanceledCallback()`.
+     * See comments in `onCreate()` for context
+     */
     private Runnable sessionCanceledCallbackRunnable;
+
+    /**
+     * The Session ID with which this Activity was invoked
+     */
+    private String sessionId;
 
     /**
      * This is called when the activity is first created, which is (almost always) when the session is being launched.
@@ -75,15 +105,33 @@ public class InvokeActivity extends ComponentActivity {
      * Handle a launch/invocation intent -- launch the Custom Tab with the provided URL.
      */
     private void handleInvokeIntent(Intent intent) {
-        launchUrl = intent.getStringExtra("launchUrl");
         sessionId = intent.getStringExtra("sessionId");
-        redirectScheme = intent.getStringExtra("redirectScheme");
+        String launchUrl = intent.getStringExtra("launchUrl");
+        String redirectUrl = intent.getStringExtra("redirectUrl");
+        String encodedRedirectUrl = redirectUrl;
+        try {
+            encodedRedirectUrl = URLEncoder.encode(redirectUrl, StandardCharsets.UTF_8.name());
+        } catch (UnsupportedEncodingException e) {
+            // Shouldn't ever actually hit this
+            Log.e("InvokeActivity", "URLEncoder.encode() returned UnsupportedEncodingException");
+            finish();
+            return;
+        }
 
-        Uri uri = Uri.parse(launchUrl + (launchUrl.contains("?") ? "&" : "?") + "scheme=" + redirectScheme);
+        Uri parsedUrl = Uri.parse(launchUrl);
+        if(!parsedUrl.getQueryParameterNames().contains("launchMode")) {
+            launchUrl += "&launchMode=mobile";
+        }
+
+        if(!parsedUrl.getQueryParameterNames().contains("redirectUrl")) {
+            launchUrl += "&redirectUrl=" + encodedRedirectUrl;
+        }
+
+        Uri uri = Uri.parse(launchUrl);
         customTabLauncher.launch(uri);
     }
 
-    /*
+    /**
      * Handle a callback intent -- return the results of the session to the activity which invoked this one.
      */
     private void handleCallbackIntent(Intent intent) {

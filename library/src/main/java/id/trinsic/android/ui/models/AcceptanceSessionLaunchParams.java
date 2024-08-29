@@ -1,7 +1,7 @@
 package id.trinsic.android.ui.models;
 
 /**
- * Internal library class used to package Acceptance Session
+ * Internal library class used to package Acceptance Session launch arguments
  */
 public class AcceptanceSessionLaunchParams {
     /**
@@ -15,15 +15,14 @@ public class AcceptanceSessionLaunchParams {
     private String launchUrl;
 
     /**
-     * Redirect scheme to be used for the Acceptance Session
-     * TODO: Change to redirect URL
+     * Redirect URL to be used for the Acceptance Session.
      */
-    private String redirectScheme;
+    private String redirectUrl;
 
-    public AcceptanceSessionLaunchParams(String sessionId, String launchUrl, String redirectScheme) {
+    public AcceptanceSessionLaunchParams(String sessionId, String launchUrl, String redirectUrl) {
         this.sessionId = sessionId;
         this.launchUrl = launchUrl;
-        this.redirectScheme = redirectScheme;
+        this.redirectUrl = redirectUrl;
     }
 
     public String getSessionId() {
@@ -34,6 +33,6 @@ public class AcceptanceSessionLaunchParams {
         return launchUrl;
     }
 
-    public String getRedirectScheme() { return redirectScheme; }
+    public String getRedirectUrl() { return redirectUrl; }
 
 }

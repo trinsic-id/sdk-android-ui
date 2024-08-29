@@ -38,20 +38,12 @@ public class TrinsicClient {
      * <br/><br/>
      * The result of session invocation is delivered via the callback registered in the `TrinsicClient` constructor.
      * @param launchUrl      The `launchUrl` returned in the Session creation backend API
-     * @param redirectScheme The redirect scheme registered in your application's manifest, in accordance with Trinsic's documentation
+     * @param redirectUrl    A URL with the scheme registered in your application's manifest, in accordance with Trinsic's documentation
      */
-    public void Invoke(String launchUrl, String redirectScheme) {
+    public void Invoke(String launchUrl, String redirectUrl) {
         Uri parsedUrl = Uri.parse(launchUrl);
         String sessionId = parsedUrl.getQueryParameter("sessionId");
 
-        if(!parsedUrl.getQueryParameterNames().contains("launchMode")) {
-            launchUrl += "&launchMode=mobile";
-        }
-
-        if(!parsedUrl.getQueryParameterNames().contains("redirectUrl")) {
-            launchUrl += "&redirectUrl=" + redirectScheme + ":///callback";
-        }
-
-        invokeLauncher.launch(new AcceptanceSessionLaunchParams(sessionId, launchUrl, redirectScheme));
+        invokeLauncher.launch(new AcceptanceSessionLaunchParams(sessionId, launchUrl, redirectUrl));
     }
 }

@@ -27,7 +27,7 @@ public class InvokeContract extends ActivityResultContract<AcceptanceSessionLaun
         intent.setAction(InvokeActivity.ACTION_INVOKE);
         intent.putExtra("sessionId", input.getSessionId());
         intent.putExtra("launchUrl", input.getLaunchUrl());
-        intent.putExtra("redirectScheme", input.getRedirectScheme());
+        intent.putExtra("redirectUrl", input.getRedirectUrl());
         return intent;
     }
 
