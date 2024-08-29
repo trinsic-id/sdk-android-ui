@@ -1,6 +1,6 @@
 # Trinsic Android Library
 
-This repository hosts the `
+This repository holds the Trinsic Android UI Library, which can be used to invoke the Trinsic identity verification flow in a native Android app.
 
 ## Installation (Gradle)
 
@@ -31,6 +31,10 @@ dependencies {
     implementation("com.github.trinsic-id:sdk-android-ui")
 }
 ```
+
+## Installation (others)
+
+See the [library's page on Jitpack](https://jitpack.io/#trinsic-id/sdk-android-ui) for installation instructions for Maven and others.
 
 ## Usage
 
