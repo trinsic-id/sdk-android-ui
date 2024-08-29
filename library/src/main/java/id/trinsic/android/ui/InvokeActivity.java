@@ -36,7 +36,7 @@ public class InvokeActivity extends ComponentActivity {
                 // Immediately after, `onNewIntent` will be triggered with the results of the session from `CallbackActivity`.
                 // On an *unsuccessful* completion, this method will be triggered indistinguishably from a successful completion, except `onNewIntent` will *not* fire afterwards.
                 // Therefore, to determine if this callback represents a cancellation or a success, we set a timeout for 20ms (which triggers the cancelation flow), and cancel the timeout if `onNewIntent` is called. 
-                if (r == null) {
+                if (sessionCanceledCallbackRunnable == null) {
                     sessionCanceledCallbackRunnable = InvokeActivity.this::sessionCanceledCallback;
                     sessionCanceledCallbackHandler.postDelayed(sessionCanceledCallbackRunnable, 20);
                 }
@@ -105,7 +105,7 @@ public class InvokeActivity extends ComponentActivity {
     private void handleResult(String sessionId, String resultsAccessKey, boolean success, boolean canceled) {
         // Clear cancelation callback if it still exists (see comments in `onCreate()` for context)
         if (sessionCanceledCallbackRunnable != null) {
-            sessionCanceledCallbackHandler.removeCallbacks(r);
+            sessionCanceledCallbackHandler.removeCallbacks(sessionCanceledCallbackRunnable);
         }
 
         int resultCode = canceled ? RESULT_CANCELED : (success ? RESULT_OK : 2); // TODO: magic error number
