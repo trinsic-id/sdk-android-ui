@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId = "id.trinsic.android_testbed"
-        minSdk = 26
+        minSdk = 28
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
