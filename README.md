@@ -2,13 +2,6 @@
 
 This repository holds the Trinsic Android UI Library, which can be used to invoke the Trinsic identity verification flow in a native Android app.
 
-## Requirements
-
-This library specifies a minimum Android SDK version of `28`.
-
-This requirement is due to [a security vulnerability in Android](https://developer.android.com/privacy-and-security/risks/strandhogg) which affects older SDK versions.
-A mitigation exists for apps which support a lower minimum SDK version, but said mitigation (setting your activity's `taskAffinity` to an empty string) breaks the functionality of this library.
-
 ## Installation (Gradle)
 
 This library is delivered via Jitpack.
@@ -73,17 +66,17 @@ Place the following snippet in your app's `AndroidManifest.xml`, replacing `[YOU
 
 ### 3. (Optional) Setup Task Affinity
 
-If your app's manifest specifies the `android:taskAffinity` property on any activity which will invoke this library, you must make some adjustments.
+If your app's manifest specifies the `android:taskAffinity` property on any activity which calls this library, you must make some adjustments.
 
 #### Custom Task Affinity
 
 If your activity specifies a custom task affinity (which is _not_ an empty string), simply make the following changes:
 
-**1. Change the `CallbackActivity` registration**
+**1. Change the `CallbackActivity` entry**
 
 Modify the snippet above (which you pasted into your `AndroidManifest.xml`) to specify the _same_ `android:taskAffinity` property as you specify on your own app's activity.
 
-**2. Add a registration for `InvokeActivity`**
+**2. Add an entry for `InvokeActivity`**
 
 Normally, your app does not need to add a manifest entry for `InvokeActivity` (which is provided by this library); however, to align task affinities, you will need to do so.
 
@@ -96,6 +89,21 @@ Simply paste the following snippet next to where you pasted the above snippet, r
 ```
 
 #### Empty Task Affinity
+
+> [!WARNING]  
+> A [security vulnerability](https://developer.android.com/privacy-and-security/risks/strandhogg) -- affecting all versions of Android below Android 9.0 / API 28 -- is partially mitigated by explicitly specifying an empty `taskAffinity`.
+> Although the official recommendation is to change your app's minimum SDK version to `28` or higher, setting an empty `taskAffinity` offers some mitigation for older devices.
+> However, since an empty `taskAffinity` breaks this library, think carefully about how you proceed.
+>
+> Note that this vulnerability is **not related to this library**: if your app's minimum SDK version is less than 28 then it is inherently vulnerable, as the issue exists within Android itself. This library has no effect on your app's security.
+>
+> Your options are:
+> 1. (**Recommended**) Increase your app's minimum SDK version to `28` or higher
+>   1. Unless your app requires it (which is uncommon), you can safely remove the `android:taskAffinity=""` property after this change
+>   2. This will prevent your app from running on [roughly 9%](https://gs.statcounter.com/os-version-market-share/android) of Android devices
+>   3. This is the only way to fully mitigate the aforementioned security issue.
+> 2. Remove the `android:taskAffinity=""` field without changing your app's minimum SDK version
+>   1. Your app may be vulnerable to activity hijacking on older Android devices
 
 If you specify a custom task affinity of `""` (an empty string), this library cannot function.
 
