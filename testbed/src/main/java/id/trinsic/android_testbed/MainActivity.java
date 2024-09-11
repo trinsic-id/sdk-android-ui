@@ -2,7 +2,7 @@ package id.trinsic.android_testbed;
 
 import android.os.Bundle;
 
-import id.trinsic.android.ui.TrinsicClient;
+import id.trinsic.android.ui.TrinsicUI;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -14,7 +14,6 @@ import android.widget.Toast;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 
 import id.trinsic.android_testbed.databinding.ActivityMainBinding;
@@ -29,7 +28,7 @@ public class MainActivity extends AppCompatActivity {
     private static String CALLBACK_REDIRECT_URL = "trinsic-android-ui-testbed-redirect-scheme:///callback";
 
     private ActivityMainBinding binding;
-    private TrinsicClient trinsicClient;
+    private TrinsicUI trinsicUi;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,7 +37,7 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        trinsicClient = new TrinsicClient(this, (result) -> {
+        trinsicUi = new TrinsicUI(this, (result) -> {
             if (result.getCanceled()) {
                 // This happens if the user closed the Android Custom Tabs activity by hitting the "X" button or by hitting Back
                 Toast.makeText(MainActivity.this, "User canceled", Toast.LENGTH_SHORT).show();
@@ -54,7 +53,7 @@ public class MainActivity extends AppCompatActivity {
         binding.buttonLaunch.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Log.d("OnClick", "Invoking Trinsic client");
+                Log.d("OnClick", "Launching Trinsic");
                 String launchUrl;
                 try {
                     launchUrl = createLaunchUrl();
@@ -63,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
                     throw new RuntimeException(e);
                 }
 
-                trinsicClient.Invoke(launchUrl, CALLBACK_REDIRECT_URL);
+                trinsicUi.Invoke(launchUrl, CALLBACK_REDIRECT_URL);
             }
         });
     }
