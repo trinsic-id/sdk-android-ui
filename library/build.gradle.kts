@@ -9,7 +9,7 @@ publishing {
         register<MavenPublication>("release") {
             groupId = "id.trinsic"
             artifactId = "android-ui"
-            version = "0.3.5"
+            version = "0.3.6"
 
             afterEvaluate {
                 from(components["release"])
