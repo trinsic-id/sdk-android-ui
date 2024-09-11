@@ -99,11 +99,11 @@ Simply paste the following snippet next to where you pasted the above snippet, r
 >
 > Your options are:
 > 1. (**Recommended**) Increase your app's minimum SDK version to `28` or higher
->   1. Unless your app requires it (which is uncommon), you can safely remove the `android:taskAffinity=""` property after this change
->   2. This will prevent your app from running on [roughly 9%](https://gs.statcounter.com/os-version-market-share/android) of Android devices
->   3. This is the only way to fully mitigate the aforementioned security issue.
+>       1. Unless your app requires it (which is uncommon), you can safely remove the `android:taskAffinity=""` property after this change
+>       2. This will prevent your app from running on [roughly 9%](https://gs.statcounter.com/os-version-market-share/android) of Android devices
+>       3. This is the only way to fully mitigate the aforementioned security issue.
 > 2. Remove the `android:taskAffinity=""` field without changing your app's minimum SDK version
->   1. Your app may be vulnerable to activity hijacking on older Android devices
+>       1. Your app may be vulnerable to activity hijacking on older Android devices
 
 If you specify a custom task affinity of `""` (an empty string), this library cannot function.
 
