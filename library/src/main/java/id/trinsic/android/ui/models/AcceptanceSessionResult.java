@@ -1,7 +1,7 @@
 package id.trinsic.android.ui.models;
 
 /**
- * The result of executing a Session via `TrinsicUI.Invoke()`
+ * The result of executing a Session via `TrinsicUI.LaunchSession()`
  */
 public class AcceptanceSessionResult {
     private String sessionId;
