@@ -40,7 +40,7 @@ public class TrinsicUI {
      * @param launchUrl      The `launchUrl` returned in the Session creation backend API
      * @param redirectUrl    A URL with the scheme registered in your application's manifest, in accordance with Trinsic's documentation
      */
-    public void Invoke(String launchUrl, String redirectUrl) {
+    public void LaunchSession(String launchUrl, String redirectUrl) {
         Uri parsedUrl = Uri.parse(launchUrl);
         String sessionId = parsedUrl.getQueryParameter("sessionId");
 
