@@ -1,6 +1,8 @@
-# Trinsic Android Library
+# Trinsic Android UI Library
 
-This repository holds the Trinsic Android UI Library, which can be used to invoke the Trinsic identity verification flow in a native Android app.
+The Trinsic Android UI Library provides ways to launch verification sessions directly from your Android application.
+
+This library must be paired with a [api library](https://github.com/trinsic-id/sdk#api-libraries) as part of a full integration.
 
 ## Installation (Gradle)
 
