@@ -62,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
                     throw new RuntimeException(e);
                 }
 
-                trinsicUi.LaunchSession(launchUrl, CALLBACK_REDIRECT_URL);
+                trinsicUi.LaunchSession(MainActivity.this, launchUrl, CALLBACK_REDIRECT_URL);
             }
         });
     }
