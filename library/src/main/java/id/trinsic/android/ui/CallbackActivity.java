@@ -34,6 +34,7 @@ public class CallbackActivity extends ComponentActivity {
         String sessionId = data.getQueryParameter("sessionId");
         String resultsAccessKey = data.getQueryParameter("resultsAccessKey");
         boolean success = data.getBooleanQueryParameter("success", false);
+        boolean canceled = data.getBooleanQueryParameter("canceled", false);
 
         Intent callbackIntent = new Intent(this, InvokeActivity.class);
         callbackIntent.setAction(InvokeActivity.ACTION_CALLBACK);
@@ -44,7 +45,7 @@ public class CallbackActivity extends ComponentActivity {
         callbackIntent.putExtra("sessionId", sessionId);
         callbackIntent.putExtra("resultsAccessKey", resultsAccessKey);
         callbackIntent.putExtra("success", success);
-        callbackIntent.putExtra("canceled", false);
+        callbackIntent.putExtra("canceled", canceled);
         startActivity(callbackIntent);
         finish(); // Shouldn't be necessary but just in case
     }
