@@ -107,24 +107,10 @@ public class InvokeActivity extends ComponentActivity {
     private void handleInvokeIntent(Intent intent) {
         sessionId = intent.getStringExtra("sessionId");
         String launchUrl = intent.getStringExtra("launchUrl");
-        String redirectUrl = intent.getStringExtra("redirectUrl");
-        String encodedRedirectUrl = redirectUrl;
-        try {
-            encodedRedirectUrl = URLEncoder.encode(redirectUrl, StandardCharsets.UTF_8.name());
-        } catch (UnsupportedEncodingException e) {
-            // Shouldn't ever actually hit this
-            Log.e("InvokeActivity", "URLEncoder.encode() returned UnsupportedEncodingException");
-            finish();
-            return;
-        }
 
         Uri parsedUrl = Uri.parse(launchUrl);
         if(!parsedUrl.getQueryParameterNames().contains("launchMode")) {
             launchUrl += "&launchMode=mobile";
-        }
-
-        if(!parsedUrl.getQueryParameterNames().contains("redirectUrl")) {
-            launchUrl += "&redirectUrl=" + encodedRedirectUrl;
         }
 
         Uri uri = Uri.parse(launchUrl);

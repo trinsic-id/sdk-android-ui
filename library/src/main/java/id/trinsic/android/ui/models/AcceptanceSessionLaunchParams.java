@@ -14,15 +14,9 @@ public class AcceptanceSessionLaunchParams {
      */
     private String launchUrl;
 
-    /**
-     * Redirect URL to be used for the Acceptance Session.
-     */
-    private String redirectUrl;
-
-    public AcceptanceSessionLaunchParams(String sessionId, String launchUrl, String redirectUrl) {
+    public AcceptanceSessionLaunchParams(String sessionId, String launchUrl) {
         this.sessionId = sessionId;
         this.launchUrl = launchUrl;
-        this.redirectUrl = redirectUrl;
     }
 
     public String getSessionId() {
@@ -32,7 +26,4 @@ public class AcceptanceSessionLaunchParams {
     public String getLaunchUrl() {
         return launchUrl;
     }
-
-    public String getRedirectUrl() { return redirectUrl; }
-
 }

@@ -47,14 +47,13 @@ public class TrinsicUI {
      * The result of session invocation is delivered via the callback registered in the `TrinsicUI` constructor.
      *
      * @param launchUrl   The `launchUrl` returned in the Session creation backend API
-     * @param redirectUrl A URL with the scheme registered in your application's manifest, in accordance with Trinsic's documentation
      */
-    public void LaunchSession(Context context, String launchUrl, String redirectUrl) {
+    public void LaunchSession(Context context, String launchUrl) {
         ValidateRedirectUrl(context, redirectUrl);
 
         Uri parsedUrl = Uri.parse(launchUrl);
         String sessionId = parsedUrl.getQueryParameter("sessionId");
 
-        invokeLauncher.launch(new AcceptanceSessionLaunchParams(sessionId, launchUrl, redirectUrl));
+        invokeLauncher.launch(new AcceptanceSessionLaunchParams(sessionId, launchUrl));
     }
 }
