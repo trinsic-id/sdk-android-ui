@@ -1,7 +1,5 @@
 package id.trinsic.android.ui;
 
-import static id.trinsic.android.ui.PlatformUtil.ValidateRedirectUrl;
-
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -49,8 +47,6 @@ public class TrinsicUI {
      * @param launchUrl   The `launchUrl` returned in the Session creation backend API
      */
     public void LaunchSession(Context context, String launchUrl) {
-        ValidateRedirectUrl(context, redirectUrl);
-
         Uri parsedUrl = Uri.parse(launchUrl);
         String sessionId = parsedUrl.getQueryParameter("sessionId");
 
