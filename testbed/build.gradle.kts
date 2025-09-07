@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace = "id.trinsic.android_testbed"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "id.trinsic.android_testbed"

@@ -1,17 +1,12 @@
 package id.trinsic.android.ui;
 
 import android.content.Context;
-import android.content.Intent;
-import android.content.pm.ActivityInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.net.Uri;
 
 import androidx.activity.result.ActivityResultCaller;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.NonNull;
 
-import java.util.List;
 import java.util.function.Consumer;
 
 import id.trinsic.android.ui.models.AcceptanceSessionLaunchParams;

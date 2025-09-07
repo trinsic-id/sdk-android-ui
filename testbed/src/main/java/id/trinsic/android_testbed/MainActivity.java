@@ -2,6 +2,7 @@ package id.trinsic.android_testbed;
 
 import android.os.Bundle;
 
+import id.trinsic.android.ui.alpha.TrinsicMdl;
 import id.trinsic.android.ui.TrinsicUI;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -19,12 +20,31 @@ import java.net.URL;
 import id.trinsic.android_testbed.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
-    // Replace the below with a URL that, when called with a GET request, will return a session launch URL as the only text content of the response.
-    // It will likely do so by using the Trinsic backend API SDK to create a session and return the launch URL.
+    /**
+     * Session-creation endpoint for the demo, hosted on your own backend.
+     *
+     * Replace with a URL that, when called with a GET request, will return a session launch URL as the only text content of the response.
+     * It will likely do so by using the Trinsic backend API SDK to create a session and return the launch URL.
+     *
+     * Specific to the Session sample.
+     */
     private static String BACKEND_CREATE_SESSION_ENDPOINT = "{REPLACE_ME}";
 
-    private ActivityMainBinding binding;
+    /**
+     * A request object as retrieved from Trinsic's CreateMdlExchange API.
+     *
+     * Specific to the mDL sample.
+     */
+    private static String MDL_REQUEST_OBJECT_BASE64URL = "";
+
+    /**
+     * The TrinsicUI instance, which will be used to launch a Hosted or Widget session.
+     *
+     * Not used for Advanced Sessions, or for mDL Exchanges.
+     */
     private TrinsicUI trinsicUi;
+
+    private ActivityMainBinding binding;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
+        // Set up Trinsic UI sample
         trinsicUi = new TrinsicUI(this, (result) -> {
             if (result.getCanceled()) {
                 // This happens if the user closed the Android Custom Tabs activity by hitting the "X" button or by hitting Back
@@ -46,21 +67,37 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        binding.buttonLaunch.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Log.d("OnClick", "Launching Trinsic");
-                String launchUrl;
-                try {
-                    launchUrl = createLaunchUrl();
-                } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "Failed to create launch URL: " + e.getMessage(), Toast.LENGTH_LONG);
-                    throw new RuntimeException(e);
-                }
-
-                trinsicUi.LaunchSession(MainActivity.this, launchUrl);
+        binding.buttonLaunch.setOnClickListener((View v) -> {
+            Log.d("OnClick", "Launching Trinsic");
+            String launchUrl;
+            try {
+                launchUrl = createLaunchUrl();
+            } catch (Exception e) {
+                Toast.makeText(MainActivity.this, "Failed to create launch URL: " + e.getMessage(), Toast.LENGTH_LONG);
+                throw new RuntimeException(e);
             }
+
+            trinsicUi.LaunchSession(MainActivity.this, launchUrl);
         });
+
+        // Set up Trinsic mDL Sample
+        if(MDL_REQUEST_OBJECT_BASE64URL.isEmpty()) {
+            binding.buttonLaunchMdl.setVisibility(View.INVISIBLE);
+        } else {
+            binding.buttonLaunchMdl.setOnClickListener((View v) -> {
+                // When the "Launch mDL Exchange" button is pressed, use the Trinsic mDL SDK to
+                // perform an exchange using a requestObject received from Trinsic's API (or hardcoded, in this case).
+                TrinsicMdl.performMdlExchange(MainActivity.this, MDL_REQUEST_OBJECT_BASE64URL, (result) -> {
+                    if(result.getSuccess()) {
+                        String token = result.getToken(); // Send this token to your backend to send it to Trinsic.
+                        Toast.makeText(MainActivity.this, "Got mDL Callback for Exchange " + result.getExchangeId() + ": " + token, Toast.LENGTH_LONG).show();
+                    } else {
+                        String exceptionMessage = result.getException().getMessage();
+                        Toast.makeText(MainActivity.this, "Got error: " + exceptionMessage, Toast.LENGTH_LONG).show();
+                    }
+                });
+            });
+        }
     }
 
     private String createLaunchUrl() throws Exception {
@@ -74,7 +111,7 @@ public class MainActivity extends AppCompatActivity {
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
             String line;
-            while((line = reader.readLine()) != null) {
+            while ((line = reader.readLine()) != null) {
                 result.append(line);
             }
         }
