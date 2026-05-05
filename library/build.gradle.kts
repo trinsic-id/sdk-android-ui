@@ -1,32 +1,36 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
-    id("maven-publish")
+    id("com.vanniktech.maven.publish") version "0.36.0"
 }
 
-publishing {
-    publications {
-        register<MavenPublication>("release") {
-            groupId = "id.trinsic"
-            artifactId = "android-ui"
-            version = "2.0.0-rc1"
+mavenPublishing {
+    coordinates("id.trinsic", "sdk-android-ui", "2.0.0-rc2")
+    publishToMavenCentral()
+    signAllPublications()
 
-            afterEvaluate {
-                from(components["release"])
+    pom {
+        name.set("Trinsic Android UI")
+        description.set("Trinsic's frontend library for Android")
+        inceptionYear.set("2024")
+        url.set("https://github.com/trinsic-id/sdk-android-ui")
+        licenses {
+            license {
+                name.set("The MIT License")
+                url.set("https://raw.githubusercontent.com/trinsic-id/sdk-android-ui/main/LICENSE")
             }
-
-            pom {
-                name = "Trinsic Android UI"
-                description = "Android library to invoke Trinsic Identity Acceptance widget"
-                url = "https://trinsic.id"
-
-                licenses {
-                    license {
-                        name = "The MIT License"
-                        url = "https://raw.githubusercontent.com/trinsic-id/sdk-android-ui/main/LICENSE"
-                    }
-                }
+        }
+        developers {
+            developer {
+                id.set("trinsic-id")
+                name.set("Trinsic")
+                url.set("https://github.com/trinsic-id/")
             }
+        }
+        scm {
+            url.set("https://github.com/trinsic-id/sdk-android-ui")
+            connection.set("scm:git:git://github.com/trinsic-id/sdk-android-ui.git")
+            developerConnection.set("scm:git:ssh://git@github.com/trinsic-id/sdk-android-ui.git")
         }
     }
 }
@@ -66,16 +70,6 @@ android {
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.1"
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-    publishing {
-        singleVariant("release") {
-            withSourcesJar()
-        }
     }
 }
 
