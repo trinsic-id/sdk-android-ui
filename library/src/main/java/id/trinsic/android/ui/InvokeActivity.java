@@ -73,7 +73,17 @@ public class InvokeActivity extends ComponentActivity {
             }
         });
 
-        handleInitializingIntent(getIntent());
+        /**
+         * It is possible that Android killed this Activity while the user was performing their
+         * verification. In such an event, when the user finishes and returns to this Activity,
+         * Android calls `onCreate()` once more with a non-NULL `savedInstanceState` to un-kill the Activity.
+         *
+         * We only want to launch the Chrome Custom Tab once -- when this Activity is initialized for the FIRST time --
+         * which this check ensures.
+         */
+        if (savedInstanceState == null) {
+            handleInitializingIntent(getIntent());
+        }
     }
 
     /**
