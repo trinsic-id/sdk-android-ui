@@ -21,8 +21,9 @@ import id.trinsic.android.ui.models.AcceptanceSessionResult;
 /**
  * Client to launch Trinsic in an Android application.
  * <br/><br/>
- * The Activity Result API must be registered by an Activity or Fragment. The static PendingIntent
- * API can be launched from any Context that Android permits to start an Activity.
+ * Use the constructor of this class, paired with `LaunchSession()`, to use the (recommended) Activity Results API.
+ * <br/>
+ * Use the static `LaunchSessionWithPendingIntent()` method if you cannot use the Activity Results API.
  * <br/><br/>
  * See Trinsic's documentation for setup instructions, including <b>required</b> changes to your app's AndroidManifest.xml file.
  */
