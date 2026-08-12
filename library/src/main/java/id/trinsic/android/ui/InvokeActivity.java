@@ -1,7 +1,9 @@
 package id.trinsic.android.ui;
 
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -14,7 +16,26 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
+import id.trinsic.android.ui.models.AcceptanceSessionResult;
+
 public class InvokeActivity extends ComponentActivity {
+    private static final String TAG = "InvokeActivity"; // Log tag for Activity
+
+    /**
+     * The key where the Callback PendingIntent in the invocation Intent for this InvokeActivity should be stored.
+     */
+    static final String INVOCATION_CALLBACK_PENDING_INTENT = "TRINSIC_INVOCATION_CALLBACK_PENDING_INTENT";
+
+    /**
+     * Internal state string for the invoked Session ID
+     */
+    private static final String STATE_SESSION_ID = "TRINSIC_SESSION_ID";
+
+    /**
+     * Internal state string for the callback PendingIntent, if launched in PendingIntent mode.
+     */
+    private static final String STATE_CALLBACK_PENDING_INTENT = "TRINSIC_CALLBACK_PENDING_INTENT";
+
     /**
      * The "invoke" action signals that this activity should launch a Custom Tab to launch the session
      * when the activity is launched
@@ -51,6 +72,12 @@ public class InvokeActivity extends ComponentActivity {
     private String sessionId;
 
     /**
+     * The PendingIntent through which results should be delivered, or NULL when this Activity was
+     * launched through the Activity Result API.
+     */
+    private PendingIntent resultPendingIntent;
+
+    /**
      * This is called when the activity is first created, which is (almost always) when the session is being launched.
      */
     @Override
@@ -83,7 +110,19 @@ public class InvokeActivity extends ComponentActivity {
          */
         if (savedInstanceState == null) {
             handleInitializingIntent(getIntent());
+        } else {
+            sessionId = savedInstanceState.getString(STATE_SESSION_ID, sessionId);
+            if (savedInstanceState.containsKey(STATE_CALLBACK_PENDING_INTENT)) {
+                resultPendingIntent = getPendingIntent(savedInstanceState, STATE_CALLBACK_PENDING_INTENT);
+            }
         }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        outState.putString(STATE_SESSION_ID, sessionId);
+        outState.putParcelable(STATE_CALLBACK_PENDING_INTENT, resultPendingIntent);
+        super.onSaveInstanceState(outState);
     }
 
     /**
@@ -94,6 +133,12 @@ public class InvokeActivity extends ComponentActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+
+        // Preserve a replacement invocation Intent so its session state can be restored later.
+        if (ACTION_INVOKE.equals(intent.getAction())) {
+            setIntent(intent);
+        }
+
         handleInitializingIntent(intent);
     }
 
@@ -104,9 +149,9 @@ public class InvokeActivity extends ComponentActivity {
         if(intent.getAction() == null) {
             finishAndRemoveTask();
         }
-        else if(intent.getAction().equals(ACTION_INVOKE)) {
+        else if(ACTION_INVOKE.equals(intent.getAction())) {
             handleInvokeIntent(intent);
-        } else if(intent.getAction().equals(ACTION_CALLBACK)) {
+        } else if(ACTION_CALLBACK.equals(intent.getAction())) {
             handleCallbackIntent(intent);
         }
     }
@@ -116,6 +161,8 @@ public class InvokeActivity extends ComponentActivity {
      */
     private void handleInvokeIntent(Intent intent) {
         sessionId = intent.getStringExtra("sessionId");
+        resultPendingIntent = getPendingIntent(intent, INVOCATION_CALLBACK_PENDING_INTENT);
+
         String launchUrl = intent.getStringExtra("launchUrl");
 
         Uri parsedUrl = Uri.parse(launchUrl);
@@ -129,39 +176,75 @@ public class InvokeActivity extends ComponentActivity {
 
     /**
      * Handle a callback intent -- return the results of the session to the activity which invoked this one.
+     *
+     * This specifically handles the callback *from `CallbackActivity`* and then calls back to the original caller of TrinsicUI
      */
     private void handleCallbackIntent(Intent intent) {
-        if(!intent.hasExtra("sessionId") || !intent.hasExtra("success")) {
+        if(!intent.hasExtra("sessionId")) {
             return;
         }
 
         String sessionId = intent.getStringExtra("sessionId");
         String resultsAccessKey = intent.getStringExtra("resultsAccessKey");
         boolean success = intent.getBooleanExtra("success", false);
-        boolean canceled = intent.getBooleanExtra("canceled", false);
 
-        handleResult(sessionId, resultsAccessKey, success, canceled);
+        handleResult(sessionId, resultsAccessKey, success, false);
     }
 
     /**
-     * Handle results of the session (either a )
+     * Handle results of the session
      */
+    @SuppressWarnings("deprecation")
     private void handleResult(String sessionId, String resultsAccessKey, boolean success, boolean canceled) {
-        // Clear cancelation callback if it still exists (see comments in `onCreate()` for context)
+        // Clear cancellation callback if it still exists (see comments in `onCreate()` for context)
         if (sessionCanceledCallbackRunnable != null) {
             sessionCanceledCallbackHandler.removeCallbacks(sessionCanceledCallbackRunnable);
         }
 
-        int resultCode = canceled ? RESULT_CANCELED : (success ? RESULT_OK : 2); // TODO: magic error number
+        // Construct results and put them in an Intent
+        AcceptanceSessionResult result = new AcceptanceSessionResult(
+                sessionId,
+                resultsAccessKey,
+                success,
+                canceled
+        );
 
         Intent intent = new Intent();
-        intent.putExtra("sessionId", sessionId);
-        intent.putExtra("resultsAccessKey", resultsAccessKey);
-        intent.putExtra("success", success);
-        intent.putExtra("canceled", canceled);
+        intent.putExtra(TrinsicPendingIntentHelper.EXTRA_ACCEPTANCE_SESSION_RESULT, result);
 
-        setResult(resultCode, intent);
+        // Deliver results depending on how we were launched
+        // If launched via the Activity Results method, we just setResult and finish.
+        // If launched via the PendingIntent method, we call the PendingIntent.
+        int resultCode = canceled ? RESULT_CANCELED : RESULT_OK;
+        if (resultPendingIntent == null) {
+            setResult(resultCode, intent);
+        } else {
+            try {
+                resultPendingIntent.send(this, resultCode, intent);
+            } catch (PendingIntent.CanceledException e) {
+                Log.e(TAG, "Unable to deliver Acceptance Session result: PendingIntent was canceled", e);
+            }
+        }
+
         finishAndRemoveTask();
+    }
+
+    @SuppressWarnings("deprecation")
+    private static PendingIntent getPendingIntent(Intent intent, String key) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return intent.getParcelableExtra(key, PendingIntent.class);
+        }
+
+        return intent.getParcelableExtra(key);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static PendingIntent getPendingIntent(Bundle bundle, String key) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return bundle.getParcelable(key, PendingIntent.class);
+        }
+
+        return bundle.getParcelable(key);
     }
 
     /**
