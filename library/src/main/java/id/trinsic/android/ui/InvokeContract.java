@@ -27,10 +27,11 @@ public class InvokeContract extends ActivityResultContract<AcceptanceSessionLaun
         return intent;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public AcceptanceSessionResult parseResult(int resultCode, @Nullable Intent intent) {
         if (intent == null) {
-            return new AcceptanceSessionResult(null, false);
+            return new AcceptanceSessionResult(null, null, false, false);
         }
 
         return TrinsicPendingIntentHelper.GetAcceptanceSessionResult(intent);
