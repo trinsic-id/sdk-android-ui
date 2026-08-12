@@ -19,7 +19,11 @@ import id.trinsic.android.ui.models.AcceptanceSessionLaunchParams;
 import id.trinsic.android.ui.models.AcceptanceSessionResult;
 
 /**
+ * Provides helpful methods for creating and processing Intents for the PendingIntent API.
  *
+ * Specifically:
+ * - Use `GetCallbackPendingIntentFlags()` to help when creating a PendingIntent to launch a Session
+ * - Use `GetAcceptanceSessionResult()` to extract the contained `AcceptanceSessionResult` from a callback Intent when the Session is done
  */
 public class TrinsicPendingIntentHelper {
     /**
