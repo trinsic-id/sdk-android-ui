@@ -34,7 +34,7 @@ public class MainActivity extends AppCompatActivity {
      *
      * Specific to the Session sample.
      */
-    private static String BACKEND_CREATE_SESSION_ENDPOINT = "https://verify.trinsic.id/api/mobiletest/create-session?redirectScheme=trinsic-android-ui-testbed-redirect-scheme";
+    private static String BACKEND_CREATE_SESSION_ENDPOINT = "{REPLACE_ME}";
 
     /**
      * A request object as retrieved from Trinsic's CreateMdlExchange API.
