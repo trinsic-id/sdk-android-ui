@@ -5,6 +5,11 @@
         <activity
             android:name=".InvokeActivity"
             android:exported="true"
-            android:launchMode="singleTop" />
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.TrinsicAndroidUi.Invisible" />
+
+        <activity
+            android:name=".CallbackActivity"
+            android:theme="@style/Theme.TrinsicAndroidUi.Invisible" />
     </application>
 </manifest>
