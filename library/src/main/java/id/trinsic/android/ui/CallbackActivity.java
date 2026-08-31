@@ -32,6 +32,7 @@ public class CallbackActivity extends ComponentActivity {
         }
 
         String sessionId = data.getQueryParameter("sessionId");
+        String redirectToken = data.getQueryParameter("redirectToken");
         String resultsAccessKey = data.getQueryParameter("resultsAccessKey");
         boolean success = data.getBooleanQueryParameter("success", false);
 
@@ -42,6 +43,7 @@ public class CallbackActivity extends ComponentActivity {
         // and CLEAR_TOP to try to latch onto the InvokeActivity if it's somewhere under this current activity (assuming we're in the same task).
         callbackIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         callbackIntent.putExtra("sessionId", sessionId);
+        callbackIntent.putExtra("redirectToken", redirectToken);
         callbackIntent.putExtra("resultsAccessKey", resultsAccessKey);
         callbackIntent.putExtra("success", success);
         startActivity(callbackIntent);

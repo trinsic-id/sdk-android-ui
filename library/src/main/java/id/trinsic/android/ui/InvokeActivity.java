@@ -185,17 +185,18 @@ public class InvokeActivity extends ComponentActivity {
         }
 
         String sessionId = intent.getStringExtra("sessionId");
+        String redirectToken = intent.getStringExtra("redirectToken");
         String resultsAccessKey = intent.getStringExtra("resultsAccessKey");
         boolean success = intent.getBooleanExtra("success", false);
 
-        handleResult(sessionId, resultsAccessKey, success, false);
+        handleResult(sessionId, redirectToken, resultsAccessKey, success, false);
     }
 
     /**
      * Handle results of the session
      */
     @SuppressWarnings("deprecation")
-    private void handleResult(String sessionId, String resultsAccessKey, boolean success, boolean canceled) {
+    private void handleResult(String sessionId, String redirectToken, String resultsAccessKey, boolean success, boolean canceled) {
         // Clear cancellation callback if it still exists (see comments in `onCreate()` for context)
         if (sessionCanceledCallbackRunnable != null) {
             sessionCanceledCallbackHandler.removeCallbacks(sessionCanceledCallbackRunnable);
@@ -204,6 +205,7 @@ public class InvokeActivity extends ComponentActivity {
         // Construct results and put them in an Intent
         AcceptanceSessionResult result = new AcceptanceSessionResult(
                 sessionId,
+                redirectToken,
                 resultsAccessKey,
                 success,
                 canceled
@@ -253,6 +255,6 @@ public class InvokeActivity extends ComponentActivity {
      * See comments in `onCreate()` for context.
      */
     private void sessionCanceledCallback() {
-        handleResult(sessionId, null, false, true);
+        handleResult(sessionId, null, null, false, true);
     }
 }

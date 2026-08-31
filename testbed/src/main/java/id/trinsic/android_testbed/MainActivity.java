@@ -101,14 +101,14 @@ public class MainActivity extends AppCompatActivity {
         });
 
         // Set up Trinsic mDL Sample
-        if(MDL_REQUEST_OBJECT_BASE64URL.isEmpty()) {
+        if (MDL_REQUEST_OBJECT_BASE64URL.isEmpty()) {
             binding.buttonLaunchMdl.setVisibility(View.INVISIBLE);
         } else {
             binding.buttonLaunchMdl.setOnClickListener((View v) -> {
                 // When the "Launch mDL Exchange" button is pressed, use the Trinsic mDL SDK to
                 // perform an exchange using a requestObject received from Trinsic's API (or hardcoded, in this case).
                 TrinsicMdl.performMdlExchange(MainActivity.this, MDL_REQUEST_OBJECT_BASE64URL, (result) -> {
-                    if(result.getSuccess()) {
+                    if (result.getSuccess()) {
                         String token = result.getToken(); // Send this token to your backend to send it to Trinsic.
                         Toast.makeText(MainActivity.this, "Got mDL Callback for Exchange " + result.getExchangeId() + ": " + token, Toast.LENGTH_LONG).show();
                     } else {
@@ -142,7 +142,16 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(context, "User canceled", Toast.LENGTH_SHORT).show();
         } else {
             // This happens if the Session completed successfully or unsuccessfully
-            Toast.makeText(context, "Session completed: " + result.getSessionId(), Toast.LENGTH_SHORT).show();
+
+            String redirectToken = result.getRedirectToken();
+
+            // `redirectToken` is always NULL as of September 1, 2026 -- but will soon after
+            // be non-NULL for all successful Sessions
+            if (redirectToken == null) {
+                Toast.makeText(context, "Session completed: " + result.getSessionId(), Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(context, "Session " + result.getSessionId() + " completed with redirectToken: " + redirectToken, Toast.LENGTH_SHORT).show();
+            }
         }
     }
 

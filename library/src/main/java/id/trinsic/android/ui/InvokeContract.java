@@ -31,7 +31,7 @@ public class InvokeContract extends ActivityResultContract<AcceptanceSessionLaun
     @Override
     public AcceptanceSessionResult parseResult(int resultCode, @Nullable Intent intent) {
         if (intent == null) {
-            return new AcceptanceSessionResult(null, null, false, false);
+            return new AcceptanceSessionResult(null, null, null, false, false);
         }
 
         return TrinsicPendingIntentHelper.GetAcceptanceSessionResult(intent);

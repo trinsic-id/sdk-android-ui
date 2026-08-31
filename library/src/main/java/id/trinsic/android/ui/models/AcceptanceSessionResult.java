@@ -11,21 +11,24 @@ import androidx.annotation.NonNull;
 public class AcceptanceSessionResult implements Parcelable {
     private String sessionId;
 
+    private String redirectToken;
+
+    private boolean canceled;
+
     @Deprecated
     private String resultsAccessKey;
 
     @Deprecated
     private boolean success;
 
-    private boolean canceled;
-
-    public AcceptanceSessionResult(String sessionId, boolean canceled) {
-        this(sessionId, null, true, canceled);
+    public AcceptanceSessionResult(String sessionId, String redirectToken, boolean canceled) {
+        this(sessionId, redirectToken, null, true, canceled);
     }
 
     @Deprecated
-    public AcceptanceSessionResult(String sessionId, String resultsAccessKey, boolean success, boolean canceled) {
+    public AcceptanceSessionResult(String sessionId, String redirectToken, String resultsAccessKey, boolean success, boolean canceled) {
         this.sessionId = sessionId;
+        this.redirectToken = redirectToken;
         this.resultsAccessKey = resultsAccessKey;
         this.success = success;
         this.canceled = canceled;
@@ -33,6 +36,7 @@ public class AcceptanceSessionResult implements Parcelable {
 
     private AcceptanceSessionResult(Parcel in) {
         sessionId = in.readString();
+        redirectToken = in.readString();
         resultsAccessKey = in.readString();
         success = in.readByte() != 0;
         canceled = in.readByte() != 0;
@@ -56,6 +60,24 @@ public class AcceptanceSessionResult implements Parcelable {
     public String getSessionId() {
         return sessionId;
     }
+
+    /**
+     * The `redirectToken` from the callback redirect, if present.
+     *
+     * NOTE: As of September 1 2026, this field always has a value of NULL, as the relevant platform changes
+     * have not yet been released. However, in the very near future, this field will be populated
+     * for all successful Sessions.
+     *
+     * If this value is non-NULL, send it to your backend; it will play a core role in future
+     * high-assurance / same-device guarantees.
+     *
+     * For now, your backend should not do anything with this value if it is sent. When
+     * this feature is fully released, Trinsic will provide guidance
+     *
+     * This field is present before the feature is fully released to ensure that the necessary
+     * changes upon release are backend-only, and do not require app or SDK updates.
+     */
+    public String getRedirectToken() { return redirectToken; }
 
     /**
      * The deprecated `resultsAccessKey` from the callback redirect, if present.
@@ -104,6 +126,7 @@ public class AcceptanceSessionResult implements Parcelable {
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
         dest.writeString(sessionId);
+        dest.writeString(redirectToken);
         dest.writeString(resultsAccessKey);
         dest.writeByte((byte) (success ? 1 : 0));
         dest.writeByte((byte) (canceled ? 1 : 0));
