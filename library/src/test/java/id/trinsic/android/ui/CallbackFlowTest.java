@@ -33,7 +33,7 @@ import static org.robolectric.Shadows.shadowOf;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 35)
 public class CallbackFlowTest {
-    private static final String CALLBACK = "https://pocketrides.app/session-complete";
+    private static final String CALLBACK = "https://example.com/session-complete";
     private static final String LAUNCH = "https://verify.trinsic.id/?sessionId=123";
     private static final String CLIENT_TOKEN_LAUNCH = "https://verify.trinsic.id/api/session/launch?clientToken=example-token";
 
@@ -87,7 +87,7 @@ public class CallbackFlowTest {
 
     @Test public void customSchemeCallbackCompletesActivityResult() {
         try (ActivityController<InvokeActivity> controller = Robolectric.buildActivity(InvokeActivity.class, invocation()).setup()) {
-            controller.newIntent(callback("pocketrides://session-complete?sessionId=123&redirectToken=token"));
+            controller.newIntent(callback("example-app://session-complete?sessionId=123&redirectToken=token"));
             assertEquals(Activity.RESULT_OK, shadowOf(controller.get()).getResultCode());
         }
     }

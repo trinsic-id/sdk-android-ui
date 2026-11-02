@@ -212,7 +212,7 @@ TrinsicUI.LaunchSessionWithPendingIntent(context, launchUrl, callbackPendingInte
 
 ## HTTPS callbacks (Android App Links)
 
-Use a dedicated callback URL, such as `https://pocketrides.app/session-complete`, as the Session's `redirectUrl` when creating it on your backend. Register that exact address in the Trinsic redirect allowlist for the relevant environment. The SDK does not change the Session's redirect URL.
+Use a dedicated callback URL, such as `https://example.com/session-complete`, as the Session's `redirectUrl` when creating it on your backend. Register that exact address in the Trinsic redirect allowlist for the relevant environment. The SDK does not change the Session's redirect URL.
 
 Register the HTTPS callback on the SDK's **CallbackActivity**, using a separate intent filter from the custom scheme:
 
@@ -225,14 +225,14 @@ Register the HTTPS callback on the SDK's **CallbackActivity**, using a separate 
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
         <data android:scheme="https"
-              android:host="pocketrides.app"
+              android:host="example.com"
               android:path="/session-complete" />
     </intent-filter>
     <!-- Keep your custom-scheme intent filter here if you also use it. -->
 </activity>
 ```
 
-Serve `https://pocketrides.app/.well-known/assetlinks.json` as JSON without a redirect. Replace the package and fingerprint with the values for the installed app (use the Play App Signing certificate for Play-distributed builds):
+Serve `https://example.com/.well-known/assetlinks.json` as JSON without a redirect. Replace the package and fingerprint with the values for the installed app (use the Play App Signing certificate for Play-distributed builds):
 
 ```json
 [{
@@ -261,7 +261,7 @@ Pass the backend's `launchUrl` directly to the SDK. The [Create Hosted Provider 
 
 The existing Activity Result and PendingIntent result APIs, including `redirectToken` and cancellation, work unchanged. Active invocation state, any known Session ID, and pending cancellation are retained when Android recreates the activity. A callback opened without a pending SDK invocation cannot resume a lost flow; your app must persist pending verification state and recover through your backend. `InvokeActivity` is internal and no longer exported; external links must target `CallbackActivity`.
 
-Keep incoming launch links separate from SDK completion links. For example, PocketRides' `/demo/pocketrides` belongs on its main activity, while `/session-complete` belongs on `CallbackActivity`. Registering the same callback on both activities makes Android routing ambiguous. Do not hard-code a customer's domain in the library manifest.
+Keep your app’s incoming links separate from verification completion links. Register the completion URL on `CallbackActivity`, and route other links to the appropriate activity in your app. Registering the same completion URL on multiple activities makes Android routing ambiguous.
 
 ### Validation
 
