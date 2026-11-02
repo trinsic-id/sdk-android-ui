@@ -14,7 +14,7 @@ See the [Trinsic docs](https://docs.trinsic.id/docs/) for more detailed informat
 
 This library supports launching both [Hosted Provider](https://docs.trinsic.id/docs/hosted-provider-session) Sessions.
 
-You _must_ specify a `redirectUrl` when creating either kind of Session, and that `redirectUrl` _must_ use a custom scheme which you register against your app (see below).
+You _must_ specify a `redirectUrl` when creating either kind of Session, and that `redirectUrl` must be either a verified HTTPS App Link or a custom-scheme URL registered against your app (see below).
 
 ### Direct Provider Sessions
 
@@ -208,3 +208,68 @@ PendingIntent callbackPendingIntent = PendingIntent.getBroadcast(
 
 TrinsicUI.LaunchSessionWithPendingIntent(context, launchUrl, callbackPendingIntent);
 ```
+
+
+## HTTPS callbacks (Android App Links)
+
+Use a dedicated callback URL, such as `https://pocketrides.app/session-complete`, as the Session's `redirectUrl` when creating it on your backend. Register that exact address in the Trinsic redirect allowlist for the relevant environment. The SDK does not change the Session's redirect URL.
+
+Register the HTTPS callback on the SDK's **CallbackActivity**, using a separate intent filter from the custom scheme:
+
+```xml
+<activity
+    android:name="id.trinsic.android.ui.CallbackActivity"
+    android:exported="true">
+    <intent-filter android:autoVerify="true">
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="https"
+              android:host="pocketrides.app"
+              android:path="/session-complete" />
+    </intent-filter>
+    <!-- Keep your custom-scheme intent filter here if you also use it. -->
+</activity>
+```
+
+Serve `https://pocketrides.app/.well-known/assetlinks.json` as JSON without a redirect. Replace the package and fingerprint with the values for the installed app (use the Play App Signing certificate for Play-distributed builds):
+
+```json
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "YOUR_APPLICATION_ID",
+    "sha256_cert_fingerprints": ["YOUR_SIGNING_CERTIFICATE_SHA256"]
+  }
+}]
+```
+
+Launch the Session using either existing API:
+
+```java
+trinsicUi.LaunchSession(this, launchUrl);
+
+TrinsicUI.LaunchSessionWithPendingIntent(
+    this, launchUrl, callbackPendingIntent
+);
+```
+
+Android routes callbacks using your manifest configuration and, for HTTPS App Links, the verified domain association. Both APIs support HTTPS and custom-scheme callbacks. When the launch URL contains a Session ID, the SDK requires the returned ID to match it. The SDK does not validate the callback's scheme, host or path.
+
+Pass the backend's `launchUrl` directly to the SDK. The [Create Hosted Provider Session response](https://docs.trinsic.id/reference/createhostedprovidersession) can contain a `clientToken` launch URL without a Session ID. For these URLs, the SDK takes the ID from the completion callback and cannot independently match it to the launched Session. Retain the separately returned `sessionId` in your app/backend to correlate and verify results. If the user closes the browser before a callback arrives, the cancellation result's Session ID is `null` for these URLs.
+
+The existing Activity Result and PendingIntent result APIs, including `redirectToken` and cancellation, work unchanged. Active invocation state, any known Session ID, and pending cancellation are retained when Android recreates the activity. A callback opened without a pending SDK invocation cannot resume a lost flow; your app must persist pending verification state and recover through your backend. `InvokeActivity` is internal and no longer exported; external links must target `CallbackActivity`.
+
+Keep incoming launch links separate from SDK completion links. For example, PocketRides' `/demo/pocketrides` belongs on its main activity, while `/session-complete` belongs on `CallbackActivity`. Registering the same callback on both activities makes Android routing ambiguous. Do not hard-code a customer's domain in the library manifest.
+
+### Validation
+
+Run `./gradlew :library:testDebugUnitTest :library:lintDebug :library:assembleRelease` for session-ID validation, activity recreation, result delivery and cancellation checks. Then install a signed app after publishing its association document:
+
+```sh
+adb shell pm verify-app-links --re-verify YOUR_APPLICATION_ID
+adb shell pm get-app-links YOUR_APPLICATION_ID
+```
+
+Require the domain to show `verified`, then complete a real Session from a Custom Tab and check cancellation and the existing custom scheme. Explicitly targeting a component with `adb am start` does not prove domain verification. See [Android App Link setup](https://developer.android.com/training/app-links/add-applinks) and [verification](https://developer.android.com/training/app-links/verify-applinks).

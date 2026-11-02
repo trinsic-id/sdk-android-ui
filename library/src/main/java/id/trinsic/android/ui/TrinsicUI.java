@@ -86,7 +86,11 @@ public class TrinsicUI {
 
     private static AcceptanceSessionLaunchParams createLaunchParams(String launchUrl) {
         Uri parsedUrl = Uri.parse(launchUrl);
+        // clientToken launch URLs do not expose the Session ID; it arrives in the callback.
         String sessionId = parsedUrl.getQueryParameter("sessionId");
+        if (sessionId != null && sessionId.isEmpty()) {
+            sessionId = null;
+        }
 
         return new AcceptanceSessionLaunchParams(sessionId, launchUrl);
     }
