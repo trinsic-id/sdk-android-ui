@@ -12,9 +12,6 @@ import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 import id.trinsic.android.ui.models.AcceptanceSessionResult;
 
@@ -30,6 +27,8 @@ public class InvokeActivity extends ComponentActivity {
      * Internal state string for the invoked Session ID
      */
     private static final String STATE_SESSION_ID = "TRINSIC_SESSION_ID";
+    private static final String STATE_INVOCATION_ACTIVE = "TRINSIC_INVOCATION_ACTIVE";
+    private static final String STATE_CANCELLATION_PENDING = "TRINSIC_CANCELLATION_PENDING";
 
     /**
      * Internal state string for the callback PendingIntent, if launched in PendingIntent mode.
@@ -67,9 +66,10 @@ public class InvokeActivity extends ComponentActivity {
     private Runnable sessionCanceledCallbackRunnable;
 
     /**
-     * The Session ID with which this Activity was invoked
+     * The Session ID with which this Activity was invoked, if present in the launch URL.
      */
     private String sessionId;
+    private boolean invocationActive;
 
     /**
      * The PendingIntent through which results should be delivered, or NULL when this Activity was
@@ -93,10 +93,7 @@ public class InvokeActivity extends ComponentActivity {
                 // Immediately after, `onNewIntent` will be triggered with the results of the session from `CallbackActivity`.
                 // On an *unsuccessful* completion, this method will be triggered indistinguishably from a successful completion, except `onNewIntent` will *not* fire afterwards.
                 // Therefore, to determine if this callback represents a cancellation or a success, we set a timeout for 20ms (which triggers the cancelation flow), and cancel the timeout if `onNewIntent` is called. 
-                if (sessionCanceledCallbackRunnable == null) {
-                    sessionCanceledCallbackRunnable = InvokeActivity.this::sessionCanceledCallback;
-                    sessionCanceledCallbackHandler.postDelayed(sessionCanceledCallbackRunnable, 20);
-                }
+                scheduleSessionCanceledCallback();
             }
         });
 
@@ -112,8 +109,16 @@ public class InvokeActivity extends ComponentActivity {
             handleInitializingIntent(getIntent());
         } else {
             sessionId = savedInstanceState.getString(STATE_SESSION_ID, sessionId);
+            invocationActive = savedInstanceState.getBoolean(STATE_INVOCATION_ACTIVE);
             if (savedInstanceState.containsKey(STATE_CALLBACK_PENDING_INTENT)) {
                 resultPendingIntent = getPendingIntent(savedInstanceState, STATE_CALLBACK_PENDING_INTENT);
+            }
+            if (ACTION_CALLBACK.equals(getIntent().getAction())) {
+                handleCallbackIntent(getIntent());
+            }
+            if (savedInstanceState.getBoolean(STATE_CANCELLATION_PENDING)) {
+                // The browser result was already consumed by the previous activity instance.
+                scheduleSessionCanceledCallback();
             }
         }
     }
@@ -121,6 +126,8 @@ public class InvokeActivity extends ComponentActivity {
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         outState.putString(STATE_SESSION_ID, sessionId);
+        outState.putBoolean(STATE_INVOCATION_ACTIVE, invocationActive);
+        outState.putBoolean(STATE_CANCELLATION_PENDING, sessionCanceledCallbackRunnable != null);
         outState.putParcelable(STATE_CALLBACK_PENDING_INTENT, resultPendingIntent);
         super.onSaveInstanceState(outState);
     }
@@ -160,14 +167,16 @@ public class InvokeActivity extends ComponentActivity {
      * Handle a launch/invocation intent -- launch the Custom Tab with the provided URL.
      */
     private void handleInvokeIntent(Intent intent) {
+        clearSessionCanceledCallback();
         sessionId = intent.getStringExtra("sessionId");
+        invocationActive = true;
         resultPendingIntent = getPendingIntent(intent, INVOCATION_CALLBACK_PENDING_INTENT);
 
         String launchUrl = intent.getStringExtra("launchUrl");
 
         Uri parsedUrl = Uri.parse(launchUrl);
         if(!parsedUrl.getQueryParameterNames().contains("launchMode")) {
-            launchUrl += "&launchMode=mobile";
+            launchUrl = parsedUrl.buildUpon().appendQueryParameter("launchMode", "mobile").build().toString();
         }
 
         Uri uri = Uri.parse(launchUrl);
@@ -180,16 +189,26 @@ public class InvokeActivity extends ComponentActivity {
      * This specifically handles the callback *from `CallbackActivity`* and then calls back to the original caller of TrinsicUI
      */
     private void handleCallbackIntent(Intent intent) {
-        if(!intent.hasExtra("sessionId")) {
+        // A cold callback cannot recreate a lost verification flow or manufacture a result.
+        if (!invocationActive) {
+            finish();
             return;
         }
+        Uri data = intent.getData();
+        if (data == null || !data.isHierarchical()
+                || data.getQueryParameters("sessionId").size() != 1) {
+            return;
+        }
+        String returnedSessionId = data.getQueryParameter("sessionId");
+        if (returnedSessionId == null || returnedSessionId.isEmpty()
+                || (sessionId != null && !sessionId.equals(returnedSessionId))) {
+            return;
+        }
+        String redirectToken = data.getQueryParameter("redirectToken");
+        String resultsAccessKey = data.getQueryParameter("resultsAccessKey");
+        boolean success = data.getBooleanQueryParameter("success", true);
 
-        String sessionId = intent.getStringExtra("sessionId");
-        String redirectToken = intent.getStringExtra("redirectToken");
-        String resultsAccessKey = intent.getStringExtra("resultsAccessKey");
-        boolean success = intent.getBooleanExtra("success", false);
-
-        handleResult(sessionId, redirectToken, resultsAccessKey, success, false);
+        handleResult(returnedSessionId, redirectToken, resultsAccessKey, success, false);
     }
 
     /**
@@ -197,10 +216,10 @@ public class InvokeActivity extends ComponentActivity {
      */
     @SuppressWarnings("deprecation")
     private void handleResult(String sessionId, String redirectToken, String resultsAccessKey, boolean success, boolean canceled) {
+        if (!invocationActive) return;
+        invocationActive = false;
         // Clear cancellation callback if it still exists (see comments in `onCreate()` for context)
-        if (sessionCanceledCallbackRunnable != null) {
-            sessionCanceledCallbackHandler.removeCallbacks(sessionCanceledCallbackRunnable);
-        }
+        clearSessionCanceledCallback();
 
         // Construct results and put them in an Intent
         AcceptanceSessionResult result = new AcceptanceSessionResult(
@@ -249,6 +268,20 @@ public class InvokeActivity extends ComponentActivity {
         return bundle.getParcelable(key);
     }
 
+    private void scheduleSessionCanceledCallback() {
+        if (invocationActive && sessionCanceledCallbackRunnable == null) {
+            sessionCanceledCallbackRunnable = this::sessionCanceledCallback;
+            sessionCanceledCallbackHandler.postDelayed(sessionCanceledCallbackRunnable, 20);
+        }
+    }
+
+    private void clearSessionCanceledCallback() {
+        if (sessionCanceledCallbackRunnable != null) {
+            sessionCanceledCallbackHandler.removeCallbacks(sessionCanceledCallbackRunnable);
+            sessionCanceledCallbackRunnable = null;
+        }
+    }
+
     /**
      * Called by `sessionCanceledCallbackHandler` after a timeout (which is started when the Custom Tab activity finishes) to detect session cancelation.
      * 
@@ -256,5 +289,11 @@ public class InvokeActivity extends ComponentActivity {
      */
     private void sessionCanceledCallback() {
         handleResult(sessionId, null, null, false, true);
+    }
+
+    @Override
+    protected void onDestroy() {
+        clearSessionCanceledCallback();
+        super.onDestroy();
     }
 }
