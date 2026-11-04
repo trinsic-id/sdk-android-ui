@@ -4,6 +4,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 /**
  * The result of executing a Session via `TrinsicUI.LaunchSession()` or `TrinsicUI.LaunchSessionWithPendingIntent()`.
@@ -15,31 +16,27 @@ public class AcceptanceSessionResult implements Parcelable {
 
     private boolean canceled;
 
-    @Deprecated
-    private String resultsAccessKey;
+    private String callbackUrl;
 
-    @Deprecated
-    private boolean success;
-
-    public AcceptanceSessionResult(String sessionId, String redirectToken, boolean canceled) {
-        this(sessionId, redirectToken, null, true, canceled);
+    public AcceptanceSessionResult(@Nullable String sessionId, @Nullable String redirectToken, boolean canceled) {
+        this(sessionId, redirectToken, null, canceled);
     }
 
-    @Deprecated
-    public AcceptanceSessionResult(String sessionId, String redirectToken, String resultsAccessKey, boolean success, boolean canceled) {
-        this.sessionId = sessionId;
-        this.redirectToken = redirectToken;
-        this.resultsAccessKey = resultsAccessKey;
-        this.success = success;
+    public AcceptanceSessionResult(@Nullable String sessionId, @Nullable String redirectToken,
+                                   @Nullable String callbackUrl, boolean canceled) {
+        this.sessionId = nullIfEmpty(sessionId);
+        this.redirectToken = nullIfEmpty(redirectToken);
+        this.callbackUrl = callbackUrl;
         this.canceled = canceled;
     }
 
     private AcceptanceSessionResult(Parcel in) {
-        sessionId = in.readString();
-        redirectToken = in.readString();
-        resultsAccessKey = in.readString();
-        success = in.readByte() != 0;
-        canceled = in.readByte() != 0;
+        this(in.readString(), in.readString(), in.readString(), in.readByte() != 0);
+    }
+
+    @Nullable
+    private static String nullIfEmpty(@Nullable String value) {
+        return value == null || value.isEmpty() ? null : value;
     }
 
     public static final Creator<AcceptanceSessionResult> CREATOR = new Creator<AcceptanceSessionResult>() {
@@ -55,53 +52,30 @@ public class AcceptanceSessionResult implements Parcelable {
     };
 
     /**
-     * The ID of the Acceptance Session this result is for
+     * The ID of the Acceptance Session from the completion callback.
+     * When the launch URL contains a non-empty {@code sessionId}, the callback must return the same ID.
+     * On browser cancellation, this is the Session ID from the launch URL, if available.
+     * Null when the relevant URL omits the ID or supplies an empty value.
      */
+    @Nullable
     public String getSessionId() {
         return sessionId;
     }
 
     /**
-     * The `redirectToken` from the callback redirect, if present.
-     *
-     * NOTE: As of September 1 2026, this field always has a value of NULL, as the relevant platform changes
-     * have not yet been released. However, in the very near future, this field will be populated
-     * for all successful Sessions.
-     *
-     * If this value is non-NULL, send it to your backend; it will play a core role in future
-     * high-assurance / same-device guarantees.
-     *
-     * For now, your backend should not do anything with this value if it is sent. When
-     * this feature is fully released, Trinsic will provide guidance
-     *
-     * This field is present before the feature is fully released to ensure that the necessary
-     * changes upon release are backend-only, and do not require app or SDK updates.
+     * The `redirectToken` from the completion callback.
+     * Null when absent or empty, or when the user closes the browser before a callback arrives.
      */
+    @Nullable
     public String getRedirectToken() { return redirectToken; }
 
     /**
-     * The deprecated `resultsAccessKey` from the callback redirect, if present.
-     *
-     * @deprecated Per the February 2026 changes to the Trinsic platform, this field is now deprecated
-     * and will be removed from redirect URLs in the future. The `resultsAccessKey` stored in your backend
-     * from the response to Session creation should be used instead.
+     * The full completion callback URL, preserved as received, including its query and fragment.
+     * Null when no callback URL was received, such as when the user closes the browser.
      */
-    @Deprecated
-    public String getResultsAccessKey() {
-        return resultsAccessKey;
-    }
-
-    /**
-     * The deprecated `success` parameter from the callback redirect, if present.
-     * If not present, this is always `true`.
-     *
-     * @deprecated Per the February 2026 changes to the Trinsic platform, this field is now deprecated
-     * and will be removed in the future. The Trinsic API should be used as the only authoritative
-     * source for Session success.
-     */
-    @Deprecated
-    public boolean getSuccess() {
-        return success;
+    @Nullable
+    public String getCallbackUrl() {
+        return callbackUrl;
     }
 
     /**
@@ -127,8 +101,7 @@ public class AcceptanceSessionResult implements Parcelable {
     public void writeToParcel(@NonNull Parcel dest, int flags) {
         dest.writeString(sessionId);
         dest.writeString(redirectToken);
-        dest.writeString(resultsAccessKey);
-        dest.writeByte((byte) (success ? 1 : 0));
+        dest.writeString(callbackUrl);
         dest.writeByte((byte) (canceled ? 1 : 0));
     }
 }

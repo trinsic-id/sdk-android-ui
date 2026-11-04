@@ -156,6 +156,8 @@ protected void onCreate(Bundle savedInstanceState) {
     trinsicUi = new TrinsicUI(this, result -> {
         // This callback will be called when a launched Session completes or is canceled by the user
         String sessionId = result.getSessionId();
+        String redirectToken = result.getRedirectToken();
+        String callbackUrl = result.getCallbackUrl();
         boolean canceled = result.getCanceled();
         
         // Call your backend to handle Session results
@@ -188,6 +190,8 @@ public final class TrinsicResultReceiver extends BroadcastReceiver {
 
         if (result != null) {
             String sessionId = result.getSessionId();
+            String redirectToken = result.getRedirectToken();
+            String callbackUrl = result.getCallbackUrl();
             boolean canceled = result.getCanceled();
             
             // Handle results
@@ -255,11 +259,15 @@ TrinsicUI.LaunchSessionWithPendingIntent(
 );
 ```
 
-Android routes callbacks using your manifest configuration and, for HTTPS App Links, the verified domain association. Both APIs support HTTPS and custom-scheme callbacks. When the launch URL contains a Session ID, the SDK requires the returned ID to match it. The SDK does not validate the callback's scheme, host or path.
+Android routes callbacks using your manifest configuration and, for HTTPS App Links, the verified domain association. Both APIs support HTTPS and custom-scheme callbacks. When the launch URL contains a non-empty `sessionId`, the SDK requires the callback to return the same ID; callbacks with a missing, empty, or different ID are ignored. Callbacks containing duplicate `sessionId` parameters are always ignored. The SDK does not validate the callback's scheme, host or path.
 
-Pass the backend's `launchUrl` directly to the SDK. The [Create Hosted Provider Session response](https://docs.trinsic.id/reference/createhostedprovidersession) can contain a `clientToken` launch URL without a Session ID. For these URLs, the SDK takes the ID from the completion callback and cannot independently match it to the launched Session. Retain the separately returned `sessionId` in your app/backend to correlate and verify results. If the user closes the browser before a callback arrives, the cancellation result's Session ID is `null` for these URLs.
+The `launchUrl` parameter on both launch APIs should contain a non-empty `sessionId` query parameter for callback matching. If you wrap the launch flow in your own URL, expose the original Session ID on the URL passed to the SDK, for example `https://your-app.example/start?sessionId=123`. An ID appearing only inside a nested URL or a later browser redirect is not available for matching. Both APIs open the supplied URL unchanged; the SDK reads `sessionId` but does not add or inspect `launchMode`.
 
-The existing Activity Result and PendingIntent result APIs, including `redirectToken` and cancellation, work unchanged. Active invocation state, any known Session ID, and pending cancellation are retained when Android recreates the activity. A callback opened without a pending SDK invocation cannot resume a lost flow; your app must persist pending verification state and recover through your backend. `InvokeActivity` is internal and no longer exported; external links must target `CallbackActivity`.
+Launch URLs without a non-empty `sessionId` remain supported, including `clientToken` URLs. In that case, the SDK cannot match the callback to the launched Session; it takes the ID from the callback, or returns `null` if that ID is missing or empty. Retain the separately returned `sessionId` in your app/backend to correlate and verify results.
+
+Both APIs return an `AcceptanceSessionResult` with `sessionId`, `redirectToken`, `callbackUrl`, and `canceled`. Accepted completion callbacks return their `sessionId` and `redirectToken`, with missing or empty values represented as `null`. `callbackUrl` contains the complete callback URL as received, including all query parameters and any fragment. Browser cancellation returns `canceled=true`, the launch URL's Session ID when known (otherwise `null`), and `null` for `redirectToken` and `callbackUrl`. The deprecated `resultsAccessKey` and `success` properties have been removed; use your backend to determine the Session's outcome.
+
+Active invocation state, the launch Session ID, and pending cancellation are retained when Android recreates the activity. A callback opened without a pending SDK invocation cannot resume a lost flow; your app must persist pending verification state and recover through your backend. `InvokeActivity` is internal and no longer exported; external links must target `CallbackActivity`.
 
 Keep your app’s incoming links separate from verification completion links. Register the completion URL on `CallbackActivity`, and route other links to the appropriate activity in your app. Registering the same completion URL on multiple activities makes Android routing ambiguous.
 
