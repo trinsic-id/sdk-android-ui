@@ -3,15 +3,12 @@ package id.trinsic.android.ui;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Context;
-import android.content.ContextWrapper;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Build;
 
 import androidx.activity.result.ActivityResultCaller;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import java.util.function.Consumer;
 
@@ -51,10 +48,13 @@ public class TrinsicUI {
      * The result of session invocation is delivered via the callback registered in the `TrinsicUI` constructor.
      *
      * @param context   The context from which to launch the session
-     * @param launchUrl The `launchUrl` returned in the Session creation backend API
+     * @param launchUrl The Session launch URL, opened unchanged. It should contain a non-empty
+     *                  {@code sessionId} query parameter so the SDK can require the same ID in the callback.
+     *                  Custom wrapper URLs should expose the original Session ID in this parameter
+     *                  on the URL passed to this method. If absent or empty, session matching is unavailable.
      */
     public void LaunchSession(Context context, String launchUrl) {
-        invokeLauncher.launch(createLaunchParams(launchUrl));
+        invokeLauncher.launch(new AcceptanceSessionLaunchParams(launchUrl));
     }
 
     /**
@@ -65,7 +65,10 @@ public class TrinsicUI {
      * Use `TrinsicPendingIntentHelper` to assist with creating the PendingIntent and processing the result Intent contents.
      *
      * @param activity              The Activity Context from which to launch the session
-     * @param launchUrl             The `launchUrl` returned by the Session creation backend API
+     * @param launchUrl             The Session launch URL, opened unchanged. It should contain a non-empty
+     *                              {@code sessionId} query parameter so the SDK can require the same ID in the callback.
+     *                              Custom wrapper URLs should expose the original Session ID in this parameter
+     *                              on the URL passed to this method. If absent or empty, session matching is unavailable.
      * @param callbackPendingIntent A mutable PendingIntent to receive the session result callback
      * @throws IllegalArgumentException If an immutable PendingIntent is supplied
      */
@@ -78,20 +81,9 @@ public class TrinsicUI {
             throw new IllegalArgumentException("callbackPendingIntent must be mutable");
         }
 
-        Intent intent = new InvokeContract().createIntent(activity, createLaunchParams(launchUrl));
+        Intent intent = new InvokeContract().createIntent(activity, new AcceptanceSessionLaunchParams(launchUrl));
         intent.putExtra(InvokeActivity.INVOCATION_CALLBACK_PENDING_INTENT, callbackPendingIntent);
 
         activity.startActivity(intent);
-    }
-
-    private static AcceptanceSessionLaunchParams createLaunchParams(String launchUrl) {
-        Uri parsedUrl = Uri.parse(launchUrl);
-        // clientToken launch URLs do not expose the Session ID; it arrives in the callback.
-        String sessionId = parsedUrl.getQueryParameter("sessionId");
-        if (sessionId != null && sessionId.isEmpty()) {
-            sessionId = null;
-        }
-
-        return new AcceptanceSessionLaunchParams(sessionId, launchUrl);
     }
 }

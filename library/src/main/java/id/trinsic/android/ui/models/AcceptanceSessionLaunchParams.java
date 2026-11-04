@@ -5,22 +5,12 @@ package id.trinsic.android.ui.models;
  */
 public class AcceptanceSessionLaunchParams {
     /**
-     * The ID of the Acceptance Session being launched
-     */
-    private String sessionId;
-
-    /**
      * The Launch URL of the Acceptance Session, returned from the Create Session API
      */
     private String launchUrl;
 
-    public AcceptanceSessionLaunchParams(String sessionId, String launchUrl) {
-        this.sessionId = sessionId;
+    public AcceptanceSessionLaunchParams(String launchUrl) {
         this.launchUrl = launchUrl;
-    }
-
-    public String getSessionId() {
-        return sessionId;
     }
 
     public String getLaunchUrl() {

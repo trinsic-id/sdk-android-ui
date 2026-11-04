@@ -23,9 +23,6 @@ public class InvokeActivity extends ComponentActivity {
      */
     static final String INVOCATION_CALLBACK_PENDING_INTENT = "TRINSIC_INVOCATION_CALLBACK_PENDING_INTENT";
 
-    /**
-     * Internal state string for the invoked Session ID
-     */
     private static final String STATE_SESSION_ID = "TRINSIC_SESSION_ID";
     private static final String STATE_INVOCATION_ACTIVE = "TRINSIC_INVOCATION_ACTIVE";
     private static final String STATE_CANCELLATION_PENDING = "TRINSIC_CANCELLATION_PENDING";
@@ -65,9 +62,7 @@ public class InvokeActivity extends ComponentActivity {
      */
     private Runnable sessionCanceledCallbackRunnable;
 
-    /**
-     * The Session ID with which this Activity was invoked, if present in the launch URL.
-     */
+    /** The Session ID from the launch URL, if supplied, used to match completion callbacks. */
     private String sessionId;
     private boolean invocationActive;
 
@@ -108,7 +103,7 @@ public class InvokeActivity extends ComponentActivity {
         if (savedInstanceState == null) {
             handleInitializingIntent(getIntent());
         } else {
-            sessionId = savedInstanceState.getString(STATE_SESSION_ID, sessionId);
+            sessionId = savedInstanceState.getString(STATE_SESSION_ID);
             invocationActive = savedInstanceState.getBoolean(STATE_INVOCATION_ACTIVE);
             if (savedInstanceState.containsKey(STATE_CALLBACK_PENDING_INTENT)) {
                 resultPendingIntent = getPendingIntent(savedInstanceState, STATE_CALLBACK_PENDING_INTENT);
@@ -168,19 +163,15 @@ public class InvokeActivity extends ComponentActivity {
      */
     private void handleInvokeIntent(Intent intent) {
         clearSessionCanceledCallback();
-        sessionId = intent.getStringExtra("sessionId");
         invocationActive = true;
         resultPendingIntent = getPendingIntent(intent, INVOCATION_CALLBACK_PENDING_INTENT);
 
-        String launchUrl = intent.getStringExtra("launchUrl");
-
-        Uri parsedUrl = Uri.parse(launchUrl);
-        if(!parsedUrl.getQueryParameterNames().contains("launchMode")) {
-            launchUrl = parsedUrl.buildUpon().appendQueryParameter("launchMode", "mobile").build().toString();
+        Uri launchUrl = Uri.parse(intent.getStringExtra("launchUrl"));
+        sessionId = launchUrl.getQueryParameter("sessionId");
+        if (sessionId != null && sessionId.isEmpty()) {
+            sessionId = null;
         }
-
-        Uri uri = Uri.parse(launchUrl);
-        customTabLauncher.launch(uri);
+        customTabLauncher.launch(launchUrl);
     }
 
     /**
@@ -196,26 +187,22 @@ public class InvokeActivity extends ComponentActivity {
         }
         Uri data = intent.getData();
         if (data == null || !data.isHierarchical()
-                || data.getQueryParameters("sessionId").size() != 1) {
+                || data.getQueryParameters("sessionId").size() > 1) {
             return;
         }
         String returnedSessionId = data.getQueryParameter("sessionId");
-        if (returnedSessionId == null || returnedSessionId.isEmpty()
-                || (sessionId != null && !sessionId.equals(returnedSessionId))) {
+        if (sessionId != null && !sessionId.equals(returnedSessionId)) {
             return;
         }
         String redirectToken = data.getQueryParameter("redirectToken");
-        String resultsAccessKey = data.getQueryParameter("resultsAccessKey");
-        boolean success = data.getBooleanQueryParameter("success", true);
 
-        handleResult(returnedSessionId, redirectToken, resultsAccessKey, success, false);
+        handleResult(returnedSessionId, redirectToken, data.toString(), false);
     }
 
     /**
      * Handle results of the session
      */
-    @SuppressWarnings("deprecation")
-    private void handleResult(String sessionId, String redirectToken, String resultsAccessKey, boolean success, boolean canceled) {
+    private void handleResult(String sessionId, String redirectToken, String callbackUrl, boolean canceled) {
         if (!invocationActive) return;
         invocationActive = false;
         // Clear cancellation callback if it still exists (see comments in `onCreate()` for context)
@@ -225,8 +212,7 @@ public class InvokeActivity extends ComponentActivity {
         AcceptanceSessionResult result = new AcceptanceSessionResult(
                 sessionId,
                 redirectToken,
-                resultsAccessKey,
-                success,
+                callbackUrl,
                 canceled
         );
 
@@ -288,7 +274,7 @@ public class InvokeActivity extends ComponentActivity {
      * See comments in `onCreate()` for context.
      */
     private void sessionCanceledCallback() {
-        handleResult(sessionId, null, null, false, true);
+        handleResult(sessionId, null, null, true);
     }
 
     @Override

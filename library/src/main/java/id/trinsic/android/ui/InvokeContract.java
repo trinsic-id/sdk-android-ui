@@ -22,16 +22,14 @@ public class InvokeContract extends ActivityResultContract<AcceptanceSessionLaun
         Intent intent = new Intent(context, InvokeActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.setAction(InvokeActivity.ACTION_INVOKE);
-        intent.putExtra("sessionId", input.getSessionId());
         intent.putExtra("launchUrl", input.getLaunchUrl());
         return intent;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public AcceptanceSessionResult parseResult(int resultCode, @Nullable Intent intent) {
         if (intent == null) {
-            return new AcceptanceSessionResult(null, null, null, false, false);
+            return new AcceptanceSessionResult(null, null, null, false);
         }
 
         return TrinsicPendingIntentHelper.GetAcceptanceSessionResult(intent);
