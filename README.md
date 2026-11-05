@@ -24,6 +24,10 @@ Specifically, it can be used only to execute Sessions which return a `launchMeth
 
 All other interaction methods are not supported by this library and will require additional effort to implement; please contact Trinsic for guidance.
 
+### Native credential exchanges (alpha)
+
+`TrinsicMdl` launches Android Credential Manager using a request object from Trinsic's CreateMdlExchange API. See [Native API](#native-api-alpha) for Java callbacks, Kotlin coroutines, cancellation, and errors. This flow does not use browser redirects or the `CallbackActivity` setup below.
+
 ## Installation (Gradle)
 
 This library is delivered via Jitpack.
@@ -281,3 +285,101 @@ adb shell pm get-app-links YOUR_APPLICATION_ID
 ```
 
 Require the domain to show `verified`, then complete a real Session from a Custom Tab and check cancellation and the existing custom scheme. Explicitly targeting a component with `adb am start` does not prove domain verification. See [Android App Link setup](https://developer.android.com/training/app-links/add-applinks) and [verification](https://developer.android.com/training/app-links/verify-applinks).
+
+## Native API (alpha)
+
+The native API lives in `id.trinsic.android.ui.alpha`. Create an exchange on your backend and pass its base64url request object to the SDK unchanged. Use an **Activity context** (or `Fragment.requireActivity()`) so Credential Manager can launch wallet UI. The library supports API 26+, but completing an exchange requires a compatible credential provider and matching credential on the device.
+
+The SDK validates the base64url/UTF-8 envelope, required nonblank string fields (`exchangeId`, `type`, `platform`, `exchangeMechanism`, `requestObject`), and inner JSON object. The required routing values are `mdlRequest`, `google-wallet`, and `NativeApp`. Apps do not need to duplicate these checks. Invalid input produces `INVALID_CHALLENGE` through the same result path as provider failures, without throwing synchronously from the callback API.
+
+The inner `requestObject` string goes to Android unchanged, including whitespace, unknown fields, document types, and signed request data. The SDK does not build document-specific descriptors, resolve request URLs, verify signatures, or validate document/protocol-specific fields. Those remain the responsibility of the Trinsic backend and credential provider. A successful response token is the **padded base64url encoding of the exact UTF-8 credential JSON** returned by Android, with no line breaks. Send the token and exchange ID to your backend without decoding or re-encoding them.
+
+### Java: cancellable callback
+
+```java
+import id.trinsic.android.ui.alpha.MdlExchangeCall;
+import id.trinsic.android.ui.alpha.TrinsicMdl;
+
+private MdlExchangeCall exchangeCall;
+
+private void exchange(String requestObject) {
+    exchangeCall = TrinsicMdl.performMdlExchangeAsync(this, requestObject, result -> {
+        exchangeCall = null;
+        if (isDestroyed()) return;
+        if (result.getSuccess()) {
+            sendToBackend(result.getExchangeId(), result.getToken());
+        } else {
+            // Stable category, nonblank text, and the original cause when available.
+            showError(result.getError().getErrorType(), result.getError().getMessage());
+            Throwable originalCause = result.getError().getCause();
+        }
+    });
+}
+
+@Override
+protected void onDestroy() {
+    if (exchangeCall != null) {
+        exchangeCall.cancel();
+        exchangeCall = null;
+    }
+    super.onDestroy();
+}
+```
+
+Start one exchange at a time per screen. The handle's `cancel()` is thread safe and idempotent. It cancels Android's `CancellationSignal` and delivers one `CANCELLED` result even if the provider never acknowledges cancellation. Cancellation requested before result delivery wins over a queued provider response; cancellation after completion does nothing. Late or duplicate provider callbacks are ignored.
+
+Results and diagnostic events are posted to the main thread, including validation errors. Completion is delivered once per call. Exceptions thrown by your result callback remain application exceptions; they are not converted into another result. The original `TrinsicMdl.performMdlExchange(context, requestObject, callback)` method remains available with the same result getters and now uses this completion path, but does not expose a cancellation handle.
+
+### Kotlin: suspending API
+
+```kotlin
+import androidx.lifecycle.lifecycleScope
+import id.trinsic.android.ui.alpha.TrinsicMdl
+import kotlinx.coroutines.launch
+
+// Inside an Activity. lifecycleScope cancels when the Activity is destroyed.
+lifecycleScope.launch {
+    val result = TrinsicMdl.awaitMdlExchange(this@MainActivity, requestObject)
+    if (result.success) {
+        sendToBackend(result.exchangeId, result.token)
+    } else {
+        val error = requireNotNull(result.error)
+        showError(error.errorType, error.message)
+    }
+}
+```
+
+Wallet dismissal returns a result with `CANCELLED`. Cancelling the calling coroutine (including a timeout or lifecycle cancellation) cancels the Android operation and **propagates `CancellationException`**, following normal structured concurrency; it does not return a failure result to a cancelled coroutine. Do not swallow `CancellationException` in a broad `catch`. Android UI work runs on the main thread and the suspending call resumes on the caller's dispatcher.
+
+### Result and error contract
+
+On success, `success` is true, `token` is non-null, and `error`/`exception` are null. On failure, `success` is false, `token` is null, and `error` is an `MdlExchangeException`. `getException()` is retained for compatibility and returns that same SDK exception; the original Android exception is now available through `getCause()`. The exchange ID is retained once parsed, including on validation failures; it can be null when input cannot be decoded, its ID is invalid, or cancellation happens before parsing.
+
+| `MdlExchangeErrorType` | Meaning |
+| --- | --- |
+| `CANCELLED` | Wallet dismissal or explicit callback-handle cancellation. |
+| `NO_MATCHING_CREDENTIAL` | Android returned `NoCredentialException`. |
+| `INVALID_CHALLENGE` | Invalid envelope, unsupported routing values, or invalid inner JSON/request construction. |
+| `PROVIDER_FAILURE` | Other Android/provider failures, including unavailable/unsupported providers, interruption, and synchronous provider exceptions. |
+| `UNEXPECTED_RESPONSE` | A non-digital credential or failure while converting the credential response. |
+
+Provider exceptions are preserved as the cause, including their Android type and message. The SDK supplies useful fallback text when a provider message is null, empty, or whitespace. Use the enum for program logic, not message matching. Causes and provider messages can contain sensitive information; they are not included in SDK diagnostic events.
+
+### Optional diagnostics
+
+Pass an `MdlDiagnosticListener` as the fourth argument to `performMdlExchangeAsync`, or as the `diagnostics` argument to `awaitMdlExchange`:
+
+```java
+exchangeCall = TrinsicMdl.performMdlExchangeAsync(this, requestObject, result -> {
+    // Handle the result as above.
+}, event -> {
+    recordDiagnostic(event.getStage(), event.getExchangeId(),
+            event.getSdkVersion(), event.getErrorType());
+});
+```
+
+Events contain only `stage`, nullable `exchangeId`, `sdkVersion` (the published library version), and nullable `errorType`. Stages progress through `VALIDATING_REQUEST`, `REQUESTING_CREDENTIAL`, `ENCODING_RESPONSE`, and `COMPLETED`; failures/cancellation can skip stages. Every operation emits one terminal `COMPLETED` event, whose error type is null on success. The validation event has no exchange ID yet. Coroutine cancellation after an operation has already completed does not replace its terminal event.
+
+Diagnostics are disabled unless a listener is supplied, stay local to that listener, and contain no request JSON, credential contents, tokens, exception messages, or causes. Listener exceptions are ignored so diagnostics cannot prevent completion. Listeners run on the main thread and should return quickly.
+
+The implementation uses Android's [callback API with CancellationSignal](https://developer.android.com/reference/androidx/credentials/CredentialManager) and Kotlin's [suspendCancellableCoroutine](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/suspend-cancellable-coroutine.html).
