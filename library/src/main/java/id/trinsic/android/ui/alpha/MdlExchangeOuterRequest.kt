@@ -11,6 +11,9 @@ import java.util.Base64
 /** Validates the transport envelope without interpreting or reserializing document requests. */
 internal class MdlExchangeOuterRequest(val exchangeId: String, val requestObject: String) {
     companion object {
+        private val versionKey = Regex("v[1-9][0-9]*")
+        private val supportedVersions = setOf("v1")
+
         fun parse(encodedRequest: String?): MdlExchangeOuterRequest {
             var exchangeId: String? = null
             try {
@@ -26,7 +29,10 @@ internal class MdlExchangeOuterRequest(val exchangeId: String, val requestObject
                     .onUnmappableCharacter(CodingErrorAction.REPORT)
                     .decode(ByteBuffer.wrap(bytes)).toString()
                 validateJsonObject(json)
-                val outer = JSONObject(json)
+                val envelope = JSONObject(json)
+                val version = selectVersion(envelope, supportedVersions)
+                // A version contains a complete request. Never merge with or fall back to legacy fields.
+                val outer = envelope.getJSONObject(version)
                 exchangeId = requiredString(outer, "exchangeId")
                 require(requiredString(outer, "type") == "mdlRequest") {
                     "Invalid request object: `type` must be 'mdlRequest'."
@@ -49,6 +55,14 @@ internal class MdlExchangeOuterRequest(val exchangeId: String, val requestObject
                     else "The request object must contain valid UTF-8 JSON objects."
                 throw MdlExchangeException(MdlExchangeErrorType.INVALID_CHALLENGE, message, e, exchangeId)
             }
+        }
+
+        /** Requires a supported version, including when the envelope contains only legacy fields. */
+        internal fun selectVersion(envelope: JSONObject, supportedVersions: Set<String>): String {
+            // Compare digit counts before text so arbitrarily large version numbers cannot overflow.
+            return envelope.keys().asSequence().filter { versionKey.matches(it) && it in supportedVersions }
+                .maxWithOrNull(compareBy<String> { it.length }.thenBy { it })
+                ?: throw MdlExchangeException(MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION)
         }
 
         private fun requiredString(json: JSONObject, field: String): String {

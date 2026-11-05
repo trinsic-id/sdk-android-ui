@@ -10,7 +10,8 @@ enum class MdlExchangeErrorType {
     NO_MATCHING_CREDENTIAL,
     INVALID_CHALLENGE,
     PROVIDER_FAILURE,
-    UNEXPECTED_RESPONSE
+    UNEXPECTED_RESPONSE,
+    UNSUPPORTED_CHALLENGE_VERSION
 }
 
 /**
@@ -38,6 +39,7 @@ class MdlExchangeException internal constructor(
             MdlExchangeErrorType.CANCELLED -> "The credential exchange was cancelled."
             MdlExchangeErrorType.NO_MATCHING_CREDENTIAL -> "No credential matching this request is available."
             MdlExchangeErrorType.INVALID_CHALLENGE -> "The credential exchange request is invalid."
+            MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION -> "The credential exchange request has no supported version."
             MdlExchangeErrorType.PROVIDER_FAILURE -> "The Android credential provider could not complete the exchange."
             MdlExchangeErrorType.UNEXPECTED_RESPONSE -> "The Android credential provider returned an unexpected response."
         }
