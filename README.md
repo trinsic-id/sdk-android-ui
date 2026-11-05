@@ -290,7 +290,9 @@ Require the domain to show `verified`, then complete a real Session from a Custo
 
 The native API lives in `id.trinsic.android.ui.alpha`. Create an exchange on your backend and pass its base64url request object to the SDK unchanged. Use an **Activity context** (or `Fragment.requireActivity()`) so Credential Manager can launch wallet UI. The library supports API 26+, but completing an exchange requires a compatible credential provider and matching credential on the device.
 
-The SDK validates the base64url/UTF-8 envelope, required nonblank string fields (`exchangeId`, `type`, `platform`, `exchangeMechanism`, `requestObject`), and inner JSON object. The required routing values are `mdlRequest`, `google-wallet`, and `NativeApp`. Apps do not need to duplicate these checks. Invalid input produces `INVALID_CHALLENGE` through the same result path as provider failures, without throwing synchronously from the callback API.
+The SDK requires versioned envelopes whose top-level version keys match `v[1-9][0-9]*`. It selects the highest supported version (currently `v1`), which must contain a complete request object. Unknown versions are ignored when a supported version is present. Envelopes without a supported version, including unversioned legacy requests, produce `UNSUPPORTED_CHALLENGE_VERSION`. A malformed selected request produces `INVALID_CHALLENGE`; the SDK never merges fields or falls back to another version or legacy request.
+
+The SDK validates the base64url/UTF-8 envelope, the selected request's required nonblank string fields (`exchangeId`, `type`, `platform`, `exchangeMechanism`, `requestObject`), and inner JSON object. The required routing values are `mdlRequest`, `google-wallet`, and `NativeApp`. Apps do not need to duplicate these checks. Invalid input produces `INVALID_CHALLENGE` through the same result path as provider failures, without throwing synchronously from the callback API.
 
 The inner `requestObject` string goes to Android unchanged, including whitespace, unknown fields, document types, and signed request data. The SDK does not build document-specific descriptors, resolve request URLs, verify signatures, or validate document/protocol-specific fields. Those remain the responsibility of the Trinsic backend and credential provider. A successful response token is the **padded base64url encoding of the exact UTF-8 credential JSON** returned by Android, with no line breaks. Send the token and exchange ID to your backend without decoding or re-encoding them.
 
@@ -353,13 +355,14 @@ Wallet dismissal returns a result with `CANCELLED`. Cancelling the calling corou
 
 ### Result and error contract
 
-On success, `success` is true, `token` is non-null, and `error`/`exception` are null. On failure, `success` is false, `token` is null, and `error` is an `MdlExchangeException`. `getException()` is retained for compatibility and returns that same SDK exception; the original Android exception is now available through `getCause()`. The exchange ID is retained once parsed, including on validation failures; it can be null when input cannot be decoded, its ID is invalid, or cancellation happens before parsing.
+On success, `success` is true, `token` is non-null, and `error`/`exception` are null. On failure, `success` is false, `token` is null, and `error` is an `MdlExchangeException`. `getException()` is retained for compatibility and returns that same SDK exception; the original Android exception is now available through `getCause()`. The selected request's exchange ID is retained once parsed, including on validation failures; it can be null when input cannot be decoded, no version is supported, its ID is invalid, or cancellation happens before parsing.
 
 | `MdlExchangeErrorType` | Meaning |
 | --- | --- |
 | `CANCELLED` | Wallet dismissal or explicit callback-handle cancellation. |
 | `NO_MATCHING_CREDENTIAL` | Android returned `NoCredentialException`. |
 | `INVALID_CHALLENGE` | Invalid envelope, unsupported routing values, or invalid inner JSON/request construction. |
+| `UNSUPPORTED_CHALLENGE_VERSION` | The envelope has no supported version, including when version keys are missing. |
 | `PROVIDER_FAILURE` | Other Android/provider failures, including unavailable/unsupported providers, interruption, and synchronous provider exceptions. |
 | `UNEXPECTED_RESPONSE` | A non-digital credential or failure while converting the credential response. |
 

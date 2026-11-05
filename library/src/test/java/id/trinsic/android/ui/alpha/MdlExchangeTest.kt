@@ -52,15 +52,23 @@ class MdlExchangeTest {
             "{}"
         )
         for (payload in payloads) {
-            val provider = FakeProvider()
-            val results = mutableListOf<MdlExchangeResult>()
-            val call = MdlExchangeClient(provider).start(context, envelope(payload), Consumer(results::add))
-            idle()
-            assertEquals(1, provider.calls)
-            assertEquals(payload, (provider.request.credentialOptions.single() as GetDigitalCredentialOption).requestJson)
-            assertTrue(results.isEmpty())
-            call.cancel()
-            idle()
+            val inputs = listOf(
+                envelope(payload),
+                encode(outer("{\"legacy\":true}").put("exchangeId", "legacy-exchange")
+                    .put("v1", outer(payload)).put("v99", false).toString())
+            )
+            for (input in inputs) {
+                val provider = FakeProvider()
+                val results = mutableListOf<MdlExchangeResult>()
+                val call = MdlExchangeClient(provider).start(context, input, Consumer(results::add))
+                idle()
+                assertEquals(1, provider.calls)
+                assertEquals(payload, (provider.request.credentialOptions.single() as GetDigitalCredentialOption).requestJson)
+                assertTrue(results.isEmpty())
+                call.cancel()
+                idle()
+                assertEquals("exchange-123", results.single().exchangeId)
+            }
         }
     }
 
@@ -92,14 +100,16 @@ class MdlExchangeTest {
             for (value in listOf(null, JSONObject.NULL, 123, true, JSONObject(), "", "  ")) {
                 val outer = outer()
                 if (value == null) outer.remove(field) else outer.put(field, value)
-                invalid.add(encode(outer.toString()))
+                invalid.add(versioned(outer))
+                // A complete legacy sibling must not supply missing or invalid fields in v1.
+                invalid.add(encode(outer().put("v1", outer).toString()))
             }
         }
         invalid += listOf(
-            encode(outer().put("type", "other").toString()),
-            encode(outer().put("platform", "apple-wallet").toString()),
-            encode(outer().put("exchangeMechanism", "DigitalCredentialsApi").toString()),
-            encode(outer().put("exchangeMechanism", "future").toString()),
+            versioned(outer().put("type", "other")),
+            versioned(outer().put("platform", "apple-wallet")),
+            versioned(outer().put("exchangeMechanism", "DigitalCredentialsApi")),
+            versioned(outer().put("exchangeMechanism", "future")),
             envelope("not json"), envelope("[]"), envelope("null"), envelope("{} trailing"), envelope("{\"broken\":"),
             envelope("{'invalid':'quotes'}"), envelope("{unquoted: true}"), envelope("{\"invalid\":NaN}"),
             envelope("{\"trailing\":[1,]}"), encode(outer().toString().replace("\"exchangeId\"", "'exchangeId'"))
@@ -124,6 +134,42 @@ class MdlExchangeTest {
         assertEquals("exchange-123", results.single().exchangeId)
         assertEquals("exchange-123", events.last().exchangeId)
         assertEquals(MdlExchangeErrorType.INVALID_CHALLENGE, events.last().errorType)
+    }
+
+    @Test fun versionFailuresCompleteWithoutCallingProviderOrUsingLegacyExchangeId() {
+        val cases = listOf(
+            Triple(outer(), MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
+            Triple(JSONObject(), MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
+            Triple(outer().put("v0", outer()).put("v01", outer()),
+                MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
+            Triple(outer().put("v2", false), MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
+            Triple(outer().put("v1", JSONObject.NULL), MdlExchangeErrorType.INVALID_CHALLENGE, null),
+            Triple(outer().put("v1", "not-an-object"), MdlExchangeErrorType.INVALID_CHALLENGE, null),
+            Triple(outer().put("v1", false), MdlExchangeErrorType.INVALID_CHALLENGE, null),
+            Triple(outer().put("v1", 1), MdlExchangeErrorType.INVALID_CHALLENGE, null),
+            Triple(outer().put("v1", org.json.JSONArray()), MdlExchangeErrorType.INVALID_CHALLENGE, null),
+            Triple(outer().put("v1", outer("broken").put("exchangeId", "selected-exchange")),
+                MdlExchangeErrorType.INVALID_CHALLENGE, "selected-exchange")
+        )
+        for ((request, errorType, exchangeId) in cases) {
+            val provider = FakeProvider()
+            val results = mutableListOf<MdlExchangeResult>()
+            val events = mutableListOf<MdlDiagnosticEvent>()
+            MdlExchangeClient(provider).start(context, encode(request.toString()), Consumer {
+                assertEquals(Looper.getMainLooper(), Looper.myLooper())
+                results.add(it)
+            }, events::add)
+            assertTrue("Validation must be asynchronous", results.isEmpty())
+            idle()
+            assertEquals(0, provider.calls)
+            assertFailure(results.single(), errorType)
+            assertEquals(exchangeId, results.single().exchangeId)
+            assertEquals(exchangeId, results.single().error!!.exchangeId)
+            assertEquals(listOf(MdlExchangeStage.VALIDATING_REQUEST, MdlExchangeStage.COMPLETED),
+                events.map { it.stage })
+            assertEquals(errorType, events.last().errorType)
+            assertEquals(exchangeId, events.last().exchangeId)
+        }
     }
 
     @Test fun publicAndLegacyCallbackApisDeliverInvalidInputOnMainThread() {
@@ -429,7 +475,8 @@ class MdlExchangeTest {
         .put("requestObject", inner)
         .put("futureEnvelopeField", JSONObject().put("keep", true))
 
-    private fun envelope(inner: String = "{}") = encode(outer(inner).toString())
+    private fun envelope(inner: String = "{}") = versioned(outer(inner))
+    private fun versioned(request: JSONObject) = encode(JSONObject().put("v1", request).toString())
     private fun encode(value: String) = Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))
 
     private class FakeProvider : MdlCredentialProvider {
