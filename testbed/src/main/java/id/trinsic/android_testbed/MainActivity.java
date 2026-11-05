@@ -8,6 +8,7 @@ import android.os.Bundle;
 
 import id.trinsic.android.ui.TrinsicPendingIntentHelper;
 import id.trinsic.android.ui.alpha.TrinsicMdl;
+import id.trinsic.android.ui.alpha.MdlExchangeCall;
 import id.trinsic.android.ui.TrinsicUI;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -51,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
     private TrinsicUI trinsicUi;
 
     private ActivityMainBinding binding;
+    private MdlExchangeCall mdlExchange;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,17 +109,34 @@ public class MainActivity extends AppCompatActivity {
             binding.buttonLaunchMdl.setOnClickListener((View v) -> {
                 // When the "Launch mDL Exchange" button is pressed, use the Trinsic mDL SDK to
                 // perform an exchange using a requestObject received from Trinsic's API (or hardcoded, in this case).
-                TrinsicMdl.performMdlExchange(MainActivity.this, MDL_REQUEST_OBJECT_BASE64URL, (result) -> {
+                binding.buttonLaunchMdl.setEnabled(false);
+                mdlExchange = TrinsicMdl.performMdlExchangeAsync(MainActivity.this, MDL_REQUEST_OBJECT_BASE64URL, (result) -> {
+                    mdlExchange = null;
+                    if (isDestroyed()) return;
+                    binding.buttonLaunchMdl.setEnabled(true);
                     if (result.getSuccess()) {
                         String token = result.getToken(); // Send this token to your backend to send it to Trinsic.
-                        Toast.makeText(MainActivity.this, "Got mDL Callback for Exchange " + result.getExchangeId() + ": " + token, Toast.LENGTH_LONG).show();
+                        Toast.makeText(MainActivity.this, "Completed Exchange " + result.getExchangeId(), Toast.LENGTH_LONG).show();
                     } else {
-                        String exceptionMessage = result.getException().getMessage();
-                        Toast.makeText(MainActivity.this, "Got error: " + exceptionMessage, Toast.LENGTH_LONG).show();
+                        Toast.makeText(MainActivity.this, result.getError().getErrorType() + ": "
+                                + result.getError().getMessage(), Toast.LENGTH_LONG).show();
                     }
+                }, event -> {
+                    // Diagnostic metadata contains no request/credential JSON, tokens, or provider messages.
+                    Log.d("TrinsicMdl", event.getStage() + " exchange=" + event.getExchangeId()
+                            + " sdk=" + event.getSdkVersion() + " error=" + event.getErrorType());
                 });
             });
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mdlExchange != null) {
+            mdlExchange.cancel();
+            mdlExchange = null;
+        }
+        super.onDestroy();
     }
 
     /**

@@ -4,8 +4,10 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.36.0"
 }
 
+val sdkVersion = "2.0.0-rc2"
+
 mavenPublishing {
-    coordinates("id.trinsic", "sdk-android-ui", "2.0.0-rc2")
+    coordinates("id.trinsic", "sdk-android-ui", sdkVersion)
     publishToMavenCentral()
     signAllPublications()
 
@@ -41,6 +43,7 @@ android {
 
     defaultConfig {
         minSdk = 26
+        buildConfigField("String", "SDK_VERSION", "\"$sdkVersion\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
@@ -67,6 +70,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.1"
@@ -92,6 +96,7 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2023.08.00"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2023.08.00"))
@@ -102,4 +107,5 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation("androidx.credentials:credentials:1.5.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
