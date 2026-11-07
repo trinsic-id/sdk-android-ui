@@ -1,6 +1,7 @@
 package id.trinsic.android.ui;
 
 import android.app.PendingIntent;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -9,6 +10,7 @@ import android.os.Handler;
 import android.util.Log;
 
 import androidx.activity.ComponentActivity;
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 
@@ -26,6 +28,8 @@ public class InvokeActivity extends ComponentActivity {
     private static final String STATE_SESSION_ID = "TRINSIC_SESSION_ID";
     private static final String STATE_INVOCATION_ACTIVE = "TRINSIC_INVOCATION_ACTIVE";
     private static final String STATE_CANCELLATION_PENDING = "TRINSIC_CANCELLATION_PENDING";
+    private static final String STATE_BROWSER_LAUNCHED = "TRINSIC_BROWSER_LAUNCHED";
+    private static final String STATE_LAUNCH_URL = "TRINSIC_LAUNCH_URL";
 
     /**
      * Internal state string for the callback PendingIntent, if launched in PendingIntent mode.
@@ -47,7 +51,10 @@ public class InvokeActivity extends ComponentActivity {
     /**
      * Activity launcher / result handler for the Custom Tab activity
      */
-    private ActivityResultLauncher<Uri> customTabLauncher;
+    private ActivityResultLauncher<CustomTabContract.Launch> customTabLauncher;
+    private BrowserSession browserSession;
+    private boolean browserLaunched;
+    private Uri launchUrl;
 
     /**
      * Session canceled callback handler -- used to call `sessionCanceledCallbackRunnable` after
@@ -92,6 +99,26 @@ public class InvokeActivity extends ComponentActivity {
             }
         });
 
+        browserSession = BrowserSession.get(this);
+        browserSession.pendingLaunch().observe(this, ignored -> {
+            if (!invocationActive || isFinishing()) return;
+            CustomTabContract.Launch launch = browserSession.takeLaunch();
+            if (launch == null) return;
+            browserLaunched = true;
+            try {
+                customTabLauncher.launch(launch);
+            } catch (ActivityNotFoundException | SecurityException exception) {
+                // The browser can disappear between resolving its service and opening the tab.
+                sessionCanceledCallback();
+            }
+        });
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() {
+                if (invocationActive) sessionCanceledCallback();
+                else finish();
+            }
+        });
+
         /**
          * It is possible that Android killed this Activity while the user was performing their
          * verification. In such an event, when the user finishes and returns to this Activity,
@@ -105,6 +132,10 @@ public class InvokeActivity extends ComponentActivity {
         } else {
             sessionId = savedInstanceState.getString(STATE_SESSION_ID);
             invocationActive = savedInstanceState.getBoolean(STATE_INVOCATION_ACTIVE);
+            // Old saved state predates asynchronous binding and already launched its browser.
+            browserLaunched = savedInstanceState.getBoolean(STATE_BROWSER_LAUNCHED, true);
+            String savedUrl = savedInstanceState.getString(STATE_LAUNCH_URL);
+            launchUrl = savedUrl == null ? null : Uri.parse(savedUrl);
             if (savedInstanceState.containsKey(STATE_CALLBACK_PENDING_INTENT)) {
                 resultPendingIntent = getPendingIntent(savedInstanceState, STATE_CALLBACK_PENDING_INTENT);
             }
@@ -114,6 +145,8 @@ public class InvokeActivity extends ComponentActivity {
             if (savedInstanceState.getBoolean(STATE_CANCELLATION_PENDING)) {
                 // The browser result was already consumed by the previous activity instance.
                 scheduleSessionCanceledCallback();
+            } else if (invocationActive && !browserLaunched && launchUrl != null) {
+                browserSession.restorePending(launchUrl);
             }
         }
     }
@@ -123,6 +156,8 @@ public class InvokeActivity extends ComponentActivity {
         outState.putString(STATE_SESSION_ID, sessionId);
         outState.putBoolean(STATE_INVOCATION_ACTIVE, invocationActive);
         outState.putBoolean(STATE_CANCELLATION_PENDING, sessionCanceledCallbackRunnable != null);
+        outState.putBoolean(STATE_BROWSER_LAUNCHED, browserLaunched);
+        outState.putString(STATE_LAUNCH_URL, launchUrl == null ? null : launchUrl.toString());
         outState.putParcelable(STATE_CALLBACK_PENDING_INTENT, resultPendingIntent);
         super.onSaveInstanceState(outState);
     }
@@ -164,14 +199,15 @@ public class InvokeActivity extends ComponentActivity {
     private void handleInvokeIntent(Intent intent) {
         clearSessionCanceledCallback();
         invocationActive = true;
+        browserLaunched = false;
         resultPendingIntent = getPendingIntent(intent, INVOCATION_CALLBACK_PENDING_INTENT);
 
-        Uri launchUrl = Uri.parse(intent.getStringExtra("launchUrl"));
+        launchUrl = Uri.parse(intent.getStringExtra("launchUrl"));
         sessionId = launchUrl.getQueryParameter("sessionId");
         if (sessionId != null && sessionId.isEmpty()) {
             sessionId = null;
         }
-        customTabLauncher.launch(launchUrl);
+        browserSession.prepare(launchUrl);
     }
 
     /**
@@ -205,6 +241,7 @@ public class InvokeActivity extends ComponentActivity {
     private void handleResult(String sessionId, String redirectToken, String callbackUrl, boolean canceled) {
         if (!invocationActive) return;
         invocationActive = false;
+        browserSession.close();
         // Clear cancellation callback if it still exists (see comments in `onCreate()` for context)
         clearSessionCanceledCallback();
 

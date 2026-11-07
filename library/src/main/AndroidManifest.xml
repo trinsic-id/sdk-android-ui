@@ -1,6 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <queries>
+        <!--
+            On Android 11+, package visibility can hide a default browser without Custom Tabs.
+            Make it visible so getPackageName() does not select another browser and bypass our
+            fallback. The http scheme matches AndroidX's lookup, not the verification URL.
+        -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="http" />
+        </intent>
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+    </queries>
+
     <application>
         <activity
             android:name=".InvokeActivity"
