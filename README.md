@@ -265,6 +265,12 @@ TrinsicUI.LaunchSessionWithPendingIntent(
 
 Android routes callbacks using your manifest configuration and, for HTTPS App Links, the verified domain association. Both APIs support HTTPS and custom-scheme callbacks. When the launch URL contains a non-empty `sessionId`, the SDK requires the callback to return the same ID; callbacks with a missing, empty, or different ID are ignored. Callbacks containing duplicate `sessionId` parameters are always ignored. The SDK does not validate the callback's scheme, host or path.
 
+The SDK binds to the default browser's Custom Tabs service and launches with a `CustomTabsSession`. This lets compatible browsers recognize a delayed redirect back to the originating app after verification. Bound tabs also enable redirects to external default handlers so HTTPS handoffs to provider apps remain possible. The connection stays alive while the browser or wallet is open and across activity recreation; completion or cancellation releases it. No browser package is hard-coded, and the SDK does not prefetch the verification URL. Browser visibility queries include browsers without a Custom Tabs service, so an unsupported default browser is not silently replaced.
+
+Session creation runs off the main thread. A two-second timeout covers waiting for the connection and session creation. If the default browser does not support the service, refuses the connection/session, or setup times out, the SDK falls back to the existing browser launch without a bound session. Late results cannot open another tab. Session work is limited to two concurrent calls without a queue; if both are occupied by stalled browser calls, new attempts fall back immediately. Unbinding and cancellation cannot force a stalled remote Binder call to return. Automatic callback routing in the unbound fallback remains subject to the browser's navigation restrictions. A bound session does not replace the HTTPS domain verification and callback intent filters described above. If no browser can be opened, the SDK returns a canceled result.
+
+A browser may close the Custom Tab when its initial navigation automatically redirects to another app. This still triggers the SDK's existing cancellation handling; binding does not keep a closed tab alive. Validate your provider's actual handoff and return sequence, and retain pending verification state for backend recovery as described below.
+
 The `launchUrl` parameter on both launch APIs should contain a non-empty `sessionId` query parameter for callback matching. If you wrap the launch flow in your own URL, expose the original Session ID on the URL passed to the SDK, for example `https://your-app.example/start?sessionId=123`. An ID appearing only inside a nested URL or a later browser redirect is not available for matching. Both APIs open the supplied URL unchanged; the SDK reads `sessionId` but does not add or inspect `launchMode`.
 
 Launch URLs without a non-empty `sessionId` remain supported, including `clientToken` URLs. In that case, the SDK cannot match the callback to the launched Session; it takes the ID from the callback, or returns `null` if that ID is missing or empty. Retain the separately returned `sessionId` in your app/backend to correlate and verify results.
@@ -277,14 +283,14 @@ Keep your app’s incoming links separate from verification completion links. Re
 
 ### Validation
 
-Run `./gradlew :library:testDebugUnitTest :library:lintDebug :library:assembleRelease` for session-ID validation, activity recreation, result delivery and cancellation checks. Then install a signed app after publishing its association document:
+Run `./gradlew :library:testDebugUnitTest :library:lintDebug :library:assembleRelease` for browser binding and timeout handling, session-ID validation, activity recreation, result delivery and cancellation checks. Then install a signed app after publishing its association document:
 
 ```sh
 adb shell pm verify-app-links --re-verify YOUR_APPLICATION_ID
 adb shell pm get-app-links YOUR_APPLICATION_ID
 ```
 
-Require the domain to show `verified`, then complete a real Session from a Custom Tab and check cancellation and the existing custom scheme. Explicitly targeting a component with `adb am start` does not prove domain verification. See [Android App Link setup](https://developer.android.com/training/app-links/add-applinks) and [verification](https://developer.android.com/training/app-links/verify-applinks).
+Require the domain to show `verified`, then complete a real Session from a Custom Tab, including a completion after more than 15 seconds without browser interaction. Check HTTPS and custom-scheme handoffs to a separate provider app and the complete return journey, cancellation, activity recreation while binding and while the tab is open, and a default browser without Custom Tabs support. Explicitly targeting a component with `adb am start` does not prove domain verification. See [Android App Link setup](https://developer.android.com/training/app-links/add-applinks) and [verification](https://developer.android.com/training/app-links/verify-applinks).
 
 ## Native API (alpha)
 
