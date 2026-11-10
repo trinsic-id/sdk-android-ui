@@ -6,6 +6,10 @@ to `google-wallet` with an OpenID4VP request. The valid representations preserve
 the same exchange, nonce, claims, age threshold and retention intent. Scenario
 names and selection/error expectations must stay in sync across the SDKs.
 
+Versioned request bodies use `type: "credentialRequest"`, including the hypothetical
+future versions that reuse the v1 schema for selection tests. Only the selected
+version's type is validated. Inner request strings are preserved unchanged.
+
 `NativeChallengeVersionTest` runs in the normal library unit test target. It checks
 the production parser against all fixtures with the SDK's actual v1-only support,
 and the production version selector with each fixture's hypothetical supported
