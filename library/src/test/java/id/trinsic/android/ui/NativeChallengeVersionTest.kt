@@ -1,4 +1,4 @@
-package id.trinsic.android.ui.alpha
+package id.trinsic.android.ui
 
 import java.util.Base64
 import org.json.JSONArray
@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 class NativeChallengeVersionTest {
     @Test fun parserRequiresV1Challenges() {
         val fixtures = fixtures()
-        val expected = MdlExchangeOuterRequest.parse(fixtures.single { it.name == "single-version" }.challenge)
+        val expected = CredentialExchangeOuterRequest.parse(fixtures.single { it.name == "single-version" }.challenge)
         for (fixture in fixtures) {
             // Shared fixtures include legacy and hypothetical future support; this SDK requires v1.
             val expectedError = when (fixture.name) {
@@ -26,10 +26,10 @@ class NativeChallengeVersionTest {
             }
             var actualError: String? = null
             try {
-                val actual = MdlExchangeOuterRequest.parse(fixture.challenge)
+                val actual = CredentialExchangeOuterRequest.parse(fixture.challenge)
                 assertEquals(fixture.name, expected.exchangeId, actual.exchangeId)
                 assertEquals(fixture.name, expected.requestObject, actual.requestObject)
-            } catch (error: MdlExchangeException) {
+            } catch (error: CredentialExchangeException) {
                 actualError = errorName(error)
             }
             assertEquals(fixture.name, expectedError, actualError)
@@ -38,7 +38,7 @@ class NativeChallengeVersionTest {
 
     @Test fun versionSelectionContract() {
         val fixtures = fixtures()
-        val expected = MdlExchangeOuterRequest.parse(fixtures.single { it.name == "single-version" }.challenge)
+        val expected = CredentialExchangeOuterRequest.parse(fixtures.single { it.name == "single-version" }.challenge)
         for (fixture in fixtures) {
             val expectedError = if (fixture.selectedVersion == "legacy") "unsupported_challenge_version"
                 else fixture.expectedError
@@ -48,7 +48,7 @@ class NativeChallengeVersionTest {
                 assertEquals(fixture.name, fixture.selectedVersion, selected.version)
                 assertEquals(fixture.name, expected.exchangeId, selected.request.exchangeId)
                 assertEquals(fixture.name, expected.requestObject, selected.request.requestObject)
-            } catch (error: MdlExchangeException) {
+            } catch (error: CredentialExchangeException) {
                 actualError = errorName(error)
             } catch (_: JSONException) {
                 actualError = "invalid_challenge"
@@ -61,17 +61,17 @@ class NativeChallengeVersionTest {
     // Each fixture uses the v1 request schema, so wrap the selected request in a v1 envelope.
     private fun select(fixture: Fixture): SelectedChallenge {
         val outer = JSONObject(String(Base64.getUrlDecoder().decode(fixture.challenge), Charsets.UTF_8))
-        val selected = MdlExchangeOuterRequest.selectVersion(outer, fixture.supportedVersions.toSet())
+        val selected = CredentialExchangeOuterRequest.selectVersion(outer, fixture.supportedVersions.toSet())
         val request = outer.getJSONObject(selected)
         val encoded = Base64.getUrlEncoder().withoutPadding()
             .encodeToString(JSONObject().put("v1", request).toString().toByteArray(Charsets.UTF_8))
         // No fallback after selection, including when the inner request is malformed.
-        return SelectedChallenge(selected, MdlExchangeOuterRequest.parse(encoded))
+        return SelectedChallenge(selected, CredentialExchangeOuterRequest.parse(encoded))
     }
 
-    private fun errorName(error: MdlExchangeException): String = when (error.errorType) {
-        MdlExchangeErrorType.INVALID_CHALLENGE -> "invalid_challenge"
-        MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION -> "unsupported_challenge_version"
+    private fun errorName(error: CredentialExchangeException): String = when (error.errorType) {
+        CredentialExchangeErrorType.INVALID_CHALLENGE -> "invalid_challenge"
+        CredentialExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION -> "unsupported_challenge_version"
         else -> throw AssertionError("Unexpected error type", error)
     }
 
@@ -99,5 +99,5 @@ class NativeChallengeVersionTest {
         val expectedError: String?
     )
 
-    private data class SelectedChallenge(val version: String, val request: MdlExchangeOuterRequest)
+    private data class SelectedChallenge(val version: String, val request: CredentialExchangeOuterRequest)
 }

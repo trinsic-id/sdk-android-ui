@@ -1,8 +1,6 @@
-package id.trinsic.android.ui.alpha
+package id.trinsic.android.ui
 
-import id.trinsic.android.ui.BuildConfig
-
-enum class MdlExchangeStage {
+enum class CredentialExchangeStage {
     VALIDATING_REQUEST,
     REQUESTING_CREDENTIAL,
     ENCODING_RESPONSE,
@@ -10,15 +8,15 @@ enum class MdlExchangeStage {
 }
 
 /** Metadata only: never contains request/response JSON, tokens, or exception messages/causes. */
-class MdlDiagnosticEvent internal constructor(
-    val stage: MdlExchangeStage,
+class CredentialExchangeDiagnosticEvent internal constructor(
+    val stage: CredentialExchangeStage,
     val exchangeId: String?,
-    val errorType: MdlExchangeErrorType?
+    val errorType: CredentialExchangeErrorType?
 ) {
     val sdkVersion: String = BuildConfig.SDK_VERSION
 }
 
 /** Called on the main thread. Listener exceptions do not affect the exchange. */
-fun interface MdlDiagnosticListener {
-    fun onEvent(event: MdlDiagnosticEvent)
+fun interface CredentialExchangeDiagnosticListener {
+    fun onEvent(event: CredentialExchangeDiagnosticEvent)
 }

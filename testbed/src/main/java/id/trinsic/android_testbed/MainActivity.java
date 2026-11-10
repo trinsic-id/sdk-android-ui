@@ -6,9 +6,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 
+import id.trinsic.android.ui.CredentialExchangeCall;
+import id.trinsic.android.ui.CredentialExchangeException;
+import id.trinsic.android.ui.TrinsicCredentials;
 import id.trinsic.android.ui.TrinsicPendingIntentHelper;
-import id.trinsic.android.ui.alpha.TrinsicMdl;
-import id.trinsic.android.ui.alpha.MdlExchangeCall;
 import id.trinsic.android.ui.TrinsicUI;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -38,21 +39,22 @@ public class MainActivity extends AppCompatActivity {
     private static String BACKEND_CREATE_SESSION_ENDPOINT = "{REPLACE_ME}";
 
     /**
-     * A request object as retrieved from Trinsic's CreateMdlExchange API.
+     * The base64url nextStep.content returned by Trinsic's Direct Provider Session API
+     * when nextStep.method is PerformNativeChallenge.
      *
-     * Specific to the mDL sample.
+     * Specific to the native credential exchange sample.
      */
-    private static String MDL_REQUEST_OBJECT_BASE64URL = "";
+    private static String CREDENTIAL_REQUEST_OBJECT_BASE64URL = "";
 
     /**
      * The TrinsicUI instance, which will be used to launch a Hosted or Widget session.
      *
-     * Not used for Direct Sessions, or for mDL Exchanges.
+     * Not used for native credential exchanges.
      */
     private TrinsicUI trinsicUi;
 
     private ActivityMainBinding binding;
-    private MdlExchangeCall mdlExchange;
+    private CredentialExchangeCall credentialExchange;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,28 +104,29 @@ public class MainActivity extends AppCompatActivity {
             );
         });
 
-        // Set up Trinsic mDL Sample
-        if (MDL_REQUEST_OBJECT_BASE64URL.isEmpty()) {
-            binding.buttonLaunchMdl.setVisibility(View.INVISIBLE);
+        // Set up the native credential exchange sample
+        if (CREDENTIAL_REQUEST_OBJECT_BASE64URL.isEmpty()) {
+            binding.buttonLaunchCredentialExchange.setVisibility(View.INVISIBLE);
         } else {
-            binding.buttonLaunchMdl.setOnClickListener((View v) -> {
-                // When the "Launch mDL Exchange" button is pressed, use the Trinsic mDL SDK to
-                // perform an exchange using a requestObject received from Trinsic's API (or hardcoded, in this case).
-                binding.buttonLaunchMdl.setEnabled(false);
-                mdlExchange = TrinsicMdl.performMdlExchangeAsync(MainActivity.this, MDL_REQUEST_OBJECT_BASE64URL, (result) -> {
-                    mdlExchange = null;
+            binding.buttonLaunchCredentialExchange.setOnClickListener((View v) -> {
+                // Use TrinsicCredentials to perform an exchange using the native challenge
+                // received from Trinsic's API (or hardcoded, in this case).
+                binding.buttonLaunchCredentialExchange.setEnabled(false);
+                credentialExchange = TrinsicCredentials.performCredentialExchangeAsync(MainActivity.this, CREDENTIAL_REQUEST_OBJECT_BASE64URL, (result) -> {
+                    credentialExchange = null;
                     if (isDestroyed()) return;
-                    binding.buttonLaunchMdl.setEnabled(true);
+                    binding.buttonLaunchCredentialExchange.setEnabled(true);
                     if (result.getSuccess()) {
                         String token = result.getToken(); // Send this token to your backend to send it to Trinsic.
                         Toast.makeText(MainActivity.this, "Completed Exchange " + result.getExchangeId(), Toast.LENGTH_LONG).show();
                     } else {
-                        Toast.makeText(MainActivity.this, result.getError().getErrorType() + ": "
-                                + result.getError().getMessage(), Toast.LENGTH_LONG).show();
+                        CredentialExchangeException error = result.getError();
+                        Toast.makeText(MainActivity.this, error.getErrorType() + ": "
+                                + error.getMessage(), Toast.LENGTH_LONG).show();
                     }
                 }, event -> {
                     // Diagnostic metadata contains no request/credential JSON, tokens, or provider messages.
-                    Log.d("TrinsicMdl", event.getStage() + " exchange=" + event.getExchangeId()
+                    Log.d("TrinsicCredentials", event.getStage() + " exchange=" + event.getExchangeId()
                             + " sdk=" + event.getSdkVersion() + " error=" + event.getErrorType());
                 });
             });
@@ -132,9 +135,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        if (mdlExchange != null) {
-            mdlExchange.cancel();
-            mdlExchange = null;
+        if (credentialExchange != null) {
+            credentialExchange.cancel();
+            credentialExchange = null;
         }
         super.onDestroy();
     }

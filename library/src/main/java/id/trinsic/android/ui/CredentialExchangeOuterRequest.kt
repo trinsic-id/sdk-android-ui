@@ -1,4 +1,4 @@
-package id.trinsic.android.ui.alpha
+package id.trinsic.android.ui
 
 import android.util.JsonReader
 import android.util.JsonToken
@@ -9,19 +9,19 @@ import java.nio.charset.CodingErrorAction
 import java.util.Base64
 
 /** Validates the transport envelope without interpreting or reserializing document requests. */
-internal class MdlExchangeOuterRequest(val exchangeId: String, val requestObject: String) {
+internal class CredentialExchangeOuterRequest(val exchangeId: String, val requestObject: String) {
     companion object {
         private val versionKey = Regex("v[1-9][0-9]*")
         private val supportedVersions = setOf("v1")
 
-        fun parse(encodedRequest: String?): MdlExchangeOuterRequest {
+        fun parse(encodedRequest: String?): CredentialExchangeOuterRequest {
             var exchangeId: String? = null
             try {
                 require(!encodedRequest.isNullOrBlank()) { "The request object must not be empty." }
                 val bytes = try {
                     Base64.getUrlDecoder().decode(encodedRequest)
                 } catch (e: IllegalArgumentException) {
-                    throw MdlExchangeException(MdlExchangeErrorType.INVALID_CHALLENGE,
+                    throw CredentialExchangeException(CredentialExchangeErrorType.INVALID_CHALLENGE,
                         "The request object must be base64url encoded.", e)
                 }
                 val json = Charsets.UTF_8.newDecoder()
@@ -34,8 +34,8 @@ internal class MdlExchangeOuterRequest(val exchangeId: String, val requestObject
                 // A version contains a complete request. Never merge with or fall back to legacy fields.
                 val outer = envelope.getJSONObject(version)
                 exchangeId = requiredString(outer, "exchangeId")
-                require(requiredString(outer, "type") == "mdlRequest") {
-                    "Invalid request object: `type` must be 'mdlRequest'."
+                require(requiredString(outer, "type") == "credentialRequest") {
+                    "Invalid request object: `type` must be 'credentialRequest'."
                 }
                 require(requiredString(outer, "platform") == "google-wallet") {
                     "Invalid request object: `platform` must be 'google-wallet'."
@@ -46,14 +46,14 @@ internal class MdlExchangeOuterRequest(val exchangeId: String, val requestObject
                 val inner = requiredString(outer, "requestObject")
                 // Validate syntax only. Preserve whitespace, unknown fields, and signed requests.
                 validateJsonObject(inner)
-                return MdlExchangeOuterRequest(exchangeId, inner)
-            } catch (e: MdlExchangeException) {
+                return CredentialExchangeOuterRequest(exchangeId, inner)
+            } catch (e: CredentialExchangeException) {
                 throw e
             } catch (e: Exception) {
                 // Parser exception messages can contain the request; keep them in the cause only.
                 val message = if (e is IllegalArgumentException) e.message
                     else "The request object must contain valid UTF-8 JSON objects."
-                throw MdlExchangeException(MdlExchangeErrorType.INVALID_CHALLENGE, message, e, exchangeId)
+                throw CredentialExchangeException(CredentialExchangeErrorType.INVALID_CHALLENGE, message, e, exchangeId)
             }
         }
 
@@ -62,7 +62,7 @@ internal class MdlExchangeOuterRequest(val exchangeId: String, val requestObject
             // Compare digit counts before text so arbitrarily large version numbers cannot overflow.
             return envelope.keys().asSequence().filter { versionKey.matches(it) && it in supportedVersions }
                 .maxWithOrNull(compareBy<String> { it.length }.thenBy { it })
-                ?: throw MdlExchangeException(MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION)
+                ?: throw CredentialExchangeException(CredentialExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION)
         }
 
         private fun requiredString(json: JSONObject, field: String): String {

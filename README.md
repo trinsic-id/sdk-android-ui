@@ -18,15 +18,15 @@ You _must_ specify a `redirectUrl` when creating either kind of Session, and tha
 
 ### Direct Provider Sessions
 
-This library provides **only minimal** support for [Direct Provider Sessions](https://docs.trinsic.id/docs/direct-provider-session).
+This library supports browser and native credential flows for [Direct Provider Sessions](https://docs.trinsic.id/docs/direct-provider-session).
 
-Specifically, it can be used only to execute Sessions which return a `launchMethod` of `LaunchBrowser` and a `collectionMethod` of `CaptureRedirect`.
+For browser flows, it executes Sessions which return `nextStep.method` of `LaunchBrowser` and `resultCollection.method` of `CaptureRedirect`. For `PerformNativeChallenge` steps with `SubmitNativeChallengeResponse` result collection, use the [native credential API](#native-api).
 
 All other interaction methods are not supported by this library and will require additional effort to implement; please contact Trinsic for guidance.
 
-### Native credential exchanges (alpha)
+### Native credential exchanges
 
-`TrinsicMdl` launches Android Credential Manager using a request object from Trinsic's CreateMdlExchange API. See [Native API](#native-api-alpha) for Java callbacks, Kotlin coroutines, cancellation, and errors. This flow does not use browser redirects or the `CallbackActivity` setup below.
+`TrinsicCredentials` launches Android Credential Manager using a native challenge returned by Trinsic's Direct Provider Session API. See [Native API](#native-api) for Java callbacks, Kotlin coroutines, cancellation, and errors. This flow does not use browser redirects or the `CallbackActivity` setup below.
 
 ## Installation (Gradle)
 
@@ -292,34 +292,36 @@ adb shell pm get-app-links YOUR_APPLICATION_ID
 
 Require the domain to show `verified`, then complete a real Session from a Custom Tab, including a completion after more than 15 seconds without browser interaction. Check HTTPS and custom-scheme handoffs to a separate provider app and the complete return journey, cancellation, activity recreation while binding and while the tab is open, and a default browser without Custom Tabs support. Explicitly targeting a component with `adb am start` does not prove domain verification. See [Android App Link setup](https://developer.android.com/training/app-links/add-applinks) and [verification](https://developer.android.com/training/app-links/verify-applinks).
 
-## Native API (alpha)
+## Native API
 
-The native API lives in `id.trinsic.android.ui.alpha`. Create an exchange on your backend and pass its base64url request object to the SDK unchanged. Use an **Activity context** (or `Fragment.requireActivity()`) so Credential Manager can launch wallet UI. The library supports API 26+, but completing an exchange requires a compatible credential provider and matching credential on the device.
+The native API lives in `id.trinsic.android.ui`. Create a Direct Provider Session on your backend with the `NativeChallenge` capability. When the response's `nextStep.method` is `PerformNativeChallenge`, pass its base64url `nextStep.content` to the SDK unchanged. Use an **Activity context** (or `Fragment.requireActivity()`) so Credential Manager can launch wallet UI. The library supports API 26+, but completing an exchange requires a compatible credential provider and matching credential on the device.
 
 The SDK requires versioned envelopes whose top-level version keys match `v[1-9][0-9]*`. It selects the highest supported version (currently `v1`), which must contain a complete request object. Unknown versions are ignored when a supported version is present. Envelopes without a supported version, including unversioned legacy requests, produce `UNSUPPORTED_CHALLENGE_VERSION`. A malformed selected request produces `INVALID_CHALLENGE`; the SDK never merges fields or falls back to another version or legacy request.
 
-The SDK validates the base64url/UTF-8 envelope, the selected request's required nonblank string fields (`exchangeId`, `type`, `platform`, `exchangeMechanism`, `requestObject`), and inner JSON object. The required routing values are `mdlRequest`, `google-wallet`, and `NativeApp`. Apps do not need to duplicate these checks. Invalid input produces `INVALID_CHALLENGE` through the same result path as provider failures, without throwing synchronously from the callback API.
+The SDK validates the base64url/UTF-8 envelope, the selected request's required nonblank string fields (`exchangeId`, `type`, `platform`, `exchangeMechanism`, `requestObject`), and inner JSON object. The required routing values are `credentialRequest`, `google-wallet`, and `NativeApp`. Apps do not need to duplicate these checks. Invalid input produces `INVALID_CHALLENGE` through the same result path as provider failures, without throwing synchronously from the callback API.
 
 The inner `requestObject` string goes to Android unchanged, including whitespace, unknown fields, document types, and signed request data. The SDK does not build document-specific descriptors, resolve request URLs, verify signatures, or validate document/protocol-specific fields. Those remain the responsibility of the Trinsic backend and credential provider. A successful response token is the **padded base64url encoding of the exact UTF-8 credential JSON** returned by Android, with no line breaks. Send the token and exchange ID to your backend without decoding or re-encoding them.
 
 ### Java: cancellable callback
 
 ```java
-import id.trinsic.android.ui.alpha.MdlExchangeCall;
-import id.trinsic.android.ui.alpha.TrinsicMdl;
+import id.trinsic.android.ui.CredentialExchangeCall;
+import id.trinsic.android.ui.CredentialExchangeException;
+import id.trinsic.android.ui.TrinsicCredentials;
 
-private MdlExchangeCall exchangeCall;
+private CredentialExchangeCall exchangeCall;
 
 private void exchange(String requestObject) {
-    exchangeCall = TrinsicMdl.performMdlExchangeAsync(this, requestObject, result -> {
+    exchangeCall = TrinsicCredentials.performCredentialExchangeAsync(this, requestObject, result -> {
         exchangeCall = null;
         if (isDestroyed()) return;
         if (result.getSuccess()) {
             sendToBackend(result.getExchangeId(), result.getToken());
         } else {
             // Stable category, nonblank text, and the original cause when available.
-            showError(result.getError().getErrorType(), result.getError().getMessage());
-            Throwable originalCause = result.getError().getCause();
+            CredentialExchangeException error = result.getError();
+            showError(error.getErrorType(), error.getMessage());
+            Throwable originalCause = error.getCause();
         }
     });
 }
@@ -336,18 +338,18 @@ protected void onDestroy() {
 
 Start one exchange at a time per screen. The handle's `cancel()` is thread safe and idempotent. It cancels Android's `CancellationSignal` and delivers one `CANCELLED` result even if the provider never acknowledges cancellation. Cancellation requested before result delivery wins over a queued provider response; cancellation after completion does nothing. Late or duplicate provider callbacks are ignored.
 
-Results and diagnostic events are posted to the main thread, including validation errors. Completion is delivered once per call. Exceptions thrown by your result callback remain application exceptions; they are not converted into another result. The original `TrinsicMdl.performMdlExchange(context, requestObject, callback)` method remains available with the same result getters and now uses this completion path, but does not expose a cancellation handle.
+Results and diagnostic events are posted to the main thread, including validation errors. Completion is delivered once per call. Exceptions thrown by your result callback remain application exceptions; they are not converted into another result. `TrinsicCredentials.performCredentialExchange(context, requestObject, callback)` uses this completion path without exposing a cancellation handle.
 
 ### Kotlin: suspending API
 
 ```kotlin
 import androidx.lifecycle.lifecycleScope
-import id.trinsic.android.ui.alpha.TrinsicMdl
+import id.trinsic.android.ui.TrinsicCredentials
 import kotlinx.coroutines.launch
 
 // Inside an Activity. lifecycleScope cancels when the Activity is destroyed.
 lifecycleScope.launch {
-    val result = TrinsicMdl.awaitMdlExchange(this@MainActivity, requestObject)
+    val result = TrinsicCredentials.awaitCredentialExchange(this@MainActivity, requestObject)
     if (result.success) {
         sendToBackend(result.exchangeId, result.token)
     } else {
@@ -361,9 +363,9 @@ Wallet dismissal returns a result with `CANCELLED`. Cancelling the calling corou
 
 ### Result and error contract
 
-On success, `success` is true, `token` is non-null, and `error`/`exception` are null. On failure, `success` is false, `token` is null, and `error` is an `MdlExchangeException`. `getException()` is retained for compatibility and returns that same SDK exception; the original Android exception is now available through `getCause()`. The selected request's exchange ID is retained once parsed, including on validation failures; it can be null when input cannot be decoded, no version is supported, its ID is invalid, or cancellation happens before parsing.
+On success, `success` is true, `token` is non-null, and `error`/`exception` are null. On failure, `success` is false, `token` is null, and `error` is a `CredentialExchangeException`. `getException()` returns the same SDK exception as `getError()`; the original Android exception is available through `getCause()`. The selected request's exchange ID is retained once parsed, including on validation failures; it can be null when input cannot be decoded, no version is supported, its ID is invalid, or cancellation happens before parsing.
 
-| `MdlExchangeErrorType` | Meaning |
+| `CredentialExchangeErrorType` | Meaning |
 | --- | --- |
 | `CANCELLED` | Wallet dismissal or explicit callback-handle cancellation. |
 | `NO_MATCHING_CREDENTIAL` | Android returned `NoCredentialException`. |
@@ -376,10 +378,10 @@ Provider exceptions are preserved as the cause, including their Android type and
 
 ### Optional diagnostics
 
-Pass an `MdlDiagnosticListener` as the fourth argument to `performMdlExchangeAsync`, or as the `diagnostics` argument to `awaitMdlExchange`:
+Pass a `CredentialExchangeDiagnosticListener` as the fourth argument to `performCredentialExchangeAsync`, or as the `diagnostics` argument to `awaitCredentialExchange`:
 
 ```java
-exchangeCall = TrinsicMdl.performMdlExchangeAsync(this, requestObject, result -> {
+exchangeCall = TrinsicCredentials.performCredentialExchangeAsync(this, requestObject, result -> {
     // Handle the result as above.
 }, event -> {
     recordDiagnostic(event.getStage(), event.getExchangeId(),

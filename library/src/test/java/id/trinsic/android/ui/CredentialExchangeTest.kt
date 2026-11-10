@@ -1,4 +1,4 @@
-package id.trinsic.android.ui.alpha
+package id.trinsic.android.ui
 
 import android.content.Context
 import android.os.CancellationSignal
@@ -17,7 +17,6 @@ import androidx.credentials.exceptions.GetCredentialProviderConfigurationExcepti
 import androidx.credentials.exceptions.GetCredentialUnknownException
 import androidx.credentials.exceptions.GetCredentialUnsupportedException
 import androidx.credentials.exceptions.NoCredentialException
-import id.trinsic.android.ui.BuildConfig
 import java.util.Base64
 import java.lang.reflect.Modifier
 import java.util.concurrent.Executor
@@ -41,7 +40,7 @@ import org.robolectric.annotation.LooperMode
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 @LooperMode(LooperMode.Mode.PAUSED)
-class MdlExchangeTest {
+class CredentialExchangeTest {
     private val context: Context get() = RuntimeEnvironment.getApplication()
 
     @Test fun innerPayloadIsForwardedUnchangedIncludingUnknownDocumentsAndSignedRequests() {
@@ -54,13 +53,13 @@ class MdlExchangeTest {
         for (payload in payloads) {
             val inputs = listOf(
                 envelope(payload),
-                encode(outer("{\"legacy\":true}").put("exchangeId", "legacy-exchange")
+                encode(outer("{\"legacy\":true}").put("type", "mdlRequest").put("exchangeId", "legacy-exchange")
                     .put("v1", outer(payload)).put("v99", false).toString())
             )
             for (input in inputs) {
                 val provider = FakeProvider()
-                val results = mutableListOf<MdlExchangeResult>()
-                val call = MdlExchangeClient(provider).start(context, input, Consumer(results::add))
+                val results = mutableListOf<CredentialExchangeResult>()
+                val call = CredentialExchangeClient(provider).start(context, input, Consumer(results::add))
                 idle()
                 assertEquals(1, provider.calls)
                 assertEquals(payload, (provider.request.credentialOptions.single() as GetDigitalCredentialOption).requestJson)
@@ -75,8 +74,8 @@ class MdlExchangeTest {
     @Test fun responseTokenIsPaddedBase64UrlOfExactUtf8Json() {
         for (json in listOf("{}", """ {"data":"日本語 😀 ÿ", "unknown": [1, true]} """)) {
             val provider = FakeProvider()
-            val results = mutableListOf<MdlExchangeResult>()
-            MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add))
+            val results = mutableListOf<CredentialExchangeResult>()
+            CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add))
             idle()
             provider.succeed(json)
             idle()
@@ -116,46 +115,65 @@ class MdlExchangeTest {
         )
         for (input in invalid) {
             val provider = FakeProvider()
-            val results = mutableListOf<MdlExchangeResult>()
-            MdlExchangeClient(provider).start(context, input, Consumer(results::add))
+            val results = mutableListOf<CredentialExchangeResult>()
+            CredentialExchangeClient(provider).start(context, input, Consumer(results::add))
             assertTrue("Validation must be asynchronous", results.isEmpty())
             idle()
             assertEquals(0, provider.calls)
-            assertFailure(results.single(), MdlExchangeErrorType.INVALID_CHALLENGE)
+            assertFailure(results.single(), CredentialExchangeErrorType.INVALID_CHALLENGE)
             assertNotNull(results.single().error!!.cause)
         }
     }
 
+    @Test fun v1RejectsLegacyTypeWithoutCallingProviderOrFallingBackToRootFields() {
+        val legacyTypeRequest = outer().put("type", "mdlRequest")
+        val inputs = listOf(
+            versioned(legacyTypeRequest),
+            encode(outer().put("exchangeId", "root-exchange").put("v1", legacyTypeRequest).toString())
+        )
+        for (input in inputs) {
+            val provider = FakeProvider()
+            val results = mutableListOf<CredentialExchangeResult>()
+            CredentialExchangeClient(provider).start(context, input, Consumer(results::add))
+            idle()
+            assertEquals(0, provider.calls)
+            val result = results.single()
+            assertFailure(result, CredentialExchangeErrorType.INVALID_CHALLENGE)
+            assertEquals("exchange-123", result.exchangeId)
+            assertEquals("exchange-123", result.error!!.exchangeId)
+        }
+    }
+
     @Test fun validationRetainsExchangeIdWhenItWasAvailable() {
-        val results = mutableListOf<MdlExchangeResult>()
-        val events = mutableListOf<MdlDiagnosticEvent>()
-        MdlExchangeClient(FakeProvider()).start(context, envelope("broken"), Consumer(results::add), events::add)
+        val results = mutableListOf<CredentialExchangeResult>()
+        val events = mutableListOf<CredentialExchangeDiagnosticEvent>()
+        CredentialExchangeClient(FakeProvider()).start(context, envelope("broken"), Consumer(results::add), events::add)
         idle()
         assertEquals("exchange-123", results.single().exchangeId)
         assertEquals("exchange-123", events.last().exchangeId)
-        assertEquals(MdlExchangeErrorType.INVALID_CHALLENGE, events.last().errorType)
+        assertEquals(CredentialExchangeErrorType.INVALID_CHALLENGE, events.last().errorType)
     }
 
     @Test fun versionFailuresCompleteWithoutCallingProviderOrUsingLegacyExchangeId() {
         val cases = listOf(
-            Triple(outer(), MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
-            Triple(JSONObject(), MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
+            Triple(outer(), CredentialExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
+            Triple(JSONObject(), CredentialExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
             Triple(outer().put("v0", outer()).put("v01", outer()),
-                MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
-            Triple(outer().put("v2", false), MdlExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
-            Triple(outer().put("v1", JSONObject.NULL), MdlExchangeErrorType.INVALID_CHALLENGE, null),
-            Triple(outer().put("v1", "not-an-object"), MdlExchangeErrorType.INVALID_CHALLENGE, null),
-            Triple(outer().put("v1", false), MdlExchangeErrorType.INVALID_CHALLENGE, null),
-            Triple(outer().put("v1", 1), MdlExchangeErrorType.INVALID_CHALLENGE, null),
-            Triple(outer().put("v1", org.json.JSONArray()), MdlExchangeErrorType.INVALID_CHALLENGE, null),
+                CredentialExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
+            Triple(outer().put("v2", false), CredentialExchangeErrorType.UNSUPPORTED_CHALLENGE_VERSION, null),
+            Triple(outer().put("v1", JSONObject.NULL), CredentialExchangeErrorType.INVALID_CHALLENGE, null),
+            Triple(outer().put("v1", "not-an-object"), CredentialExchangeErrorType.INVALID_CHALLENGE, null),
+            Triple(outer().put("v1", false), CredentialExchangeErrorType.INVALID_CHALLENGE, null),
+            Triple(outer().put("v1", 1), CredentialExchangeErrorType.INVALID_CHALLENGE, null),
+            Triple(outer().put("v1", org.json.JSONArray()), CredentialExchangeErrorType.INVALID_CHALLENGE, null),
             Triple(outer().put("v1", outer("broken").put("exchangeId", "selected-exchange")),
-                MdlExchangeErrorType.INVALID_CHALLENGE, "selected-exchange")
+                CredentialExchangeErrorType.INVALID_CHALLENGE, "selected-exchange")
         )
         for ((request, errorType, exchangeId) in cases) {
             val provider = FakeProvider()
-            val results = mutableListOf<MdlExchangeResult>()
-            val events = mutableListOf<MdlDiagnosticEvent>()
-            MdlExchangeClient(provider).start(context, encode(request.toString()), Consumer {
+            val results = mutableListOf<CredentialExchangeResult>()
+            val events = mutableListOf<CredentialExchangeDiagnosticEvent>()
+            CredentialExchangeClient(provider).start(context, encode(request.toString()), Consumer {
                 assertEquals(Looper.getMainLooper(), Looper.myLooper())
                 results.add(it)
             }, events::add)
@@ -165,45 +183,45 @@ class MdlExchangeTest {
             assertFailure(results.single(), errorType)
             assertEquals(exchangeId, results.single().exchangeId)
             assertEquals(exchangeId, results.single().error!!.exchangeId)
-            assertEquals(listOf(MdlExchangeStage.VALIDATING_REQUEST, MdlExchangeStage.COMPLETED),
+            assertEquals(listOf(CredentialExchangeStage.VALIDATING_REQUEST, CredentialExchangeStage.COMPLETED),
                 events.map { it.stage })
             assertEquals(errorType, events.last().errorType)
             assertEquals(exchangeId, events.last().exchangeId)
         }
     }
 
-    @Test fun publicAndLegacyCallbackApisDeliverInvalidInputOnMainThread() {
-        val results = mutableListOf<MdlExchangeResult>()
-        val callback = Consumer<MdlExchangeResult> {
+    @Test fun publicCallbackApisDeliverInvalidInputOnMainThread() {
+        val results = mutableListOf<CredentialExchangeResult>()
+        val callback = Consumer<CredentialExchangeResult> {
             assertEquals(Looper.getMainLooper(), Looper.myLooper())
             results.add(it)
         }
         val worker = Thread {
-            TrinsicMdl.performMdlExchange(context, "bad", callback)
-            TrinsicMdl.performMdlExchangeAsync(context, "bad", callback)
+            TrinsicCredentials.performCredentialExchange(context, "bad", callback)
+            TrinsicCredentials.performCredentialExchangeAsync(context, "bad", callback)
         }
         worker.start()
         worker.join()
         assertTrue(results.isEmpty())
         idle()
         assertEquals(2, results.size)
-        results.forEach { assertFailure(it, MdlExchangeErrorType.INVALID_CHALLENGE) }
+        results.forEach { assertFailure(it, CredentialExchangeErrorType.INVALID_CHALLENGE) }
     }
 
     @Test fun androidFailuresHaveStableTypesUsefulMessagesAndOriginalCauses() {
         val cases = listOf(
-            GetCredentialCancellationException() to MdlExchangeErrorType.CANCELLED,
-            NoCredentialException("") to MdlExchangeErrorType.NO_MATCHING_CREDENTIAL,
-            GetCredentialUnknownException("   ") to MdlExchangeErrorType.PROVIDER_FAILURE,
-            GetCredentialProviderConfigurationException() to MdlExchangeErrorType.PROVIDER_FAILURE,
-            GetCredentialUnsupportedException() to MdlExchangeErrorType.PROVIDER_FAILURE,
-            GetCredentialInterruptedException() to MdlExchangeErrorType.PROVIDER_FAILURE,
-            GetCredentialUnknownException("Provider unavailable") to MdlExchangeErrorType.PROVIDER_FAILURE
+            GetCredentialCancellationException() to CredentialExchangeErrorType.CANCELLED,
+            NoCredentialException("") to CredentialExchangeErrorType.NO_MATCHING_CREDENTIAL,
+            GetCredentialUnknownException("   ") to CredentialExchangeErrorType.PROVIDER_FAILURE,
+            GetCredentialProviderConfigurationException() to CredentialExchangeErrorType.PROVIDER_FAILURE,
+            GetCredentialUnsupportedException() to CredentialExchangeErrorType.PROVIDER_FAILURE,
+            GetCredentialInterruptedException() to CredentialExchangeErrorType.PROVIDER_FAILURE,
+            GetCredentialUnknownException("Provider unavailable") to CredentialExchangeErrorType.PROVIDER_FAILURE
         )
         for ((exception, expected) in cases) {
             val provider = FakeProvider()
-            val results = mutableListOf<MdlExchangeResult>()
-            MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add))
+            val results = mutableListOf<CredentialExchangeResult>()
+            CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add))
             idle()
             provider.callback.onError(exception)
             idle()
@@ -217,29 +235,29 @@ class MdlExchangeTest {
     @Test fun synchronousProviderFailureIsAlsoAResult() {
         val exception = IllegalStateException("")
         val provider = FakeProvider().apply { onGet = { throw exception } }
-        val results = mutableListOf<MdlExchangeResult>()
-        MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add))
+        val results = mutableListOf<CredentialExchangeResult>()
+        CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add))
         idle()
-        assertFailure(results.single(), MdlExchangeErrorType.PROVIDER_FAILURE)
+        assertFailure(results.single(), CredentialExchangeErrorType.PROVIDER_FAILURE)
         assertSame(exception, results.single().error!!.cause)
     }
 
     @Test fun unexpectedCredentialIsControlledFailure() {
         val provider = FakeProvider()
-        val results = mutableListOf<MdlExchangeResult>()
-        MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add))
+        val results = mutableListOf<CredentialExchangeResult>()
+        CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add))
         idle()
         provider.callback.onResult(GetCredentialResponse(PasswordCredential("user", "secret")))
         idle()
-        assertFailure(results.single(), MdlExchangeErrorType.UNEXPECTED_RESPONSE)
+        assertFailure(results.single(), CredentialExchangeErrorType.UNEXPECTED_RESPONSE)
     }
 
     @Test fun duplicateProviderCallbacksOnlyCompleteOnce() {
         for (errorFirst in listOf(false, true)) {
             val provider = FakeProvider()
-            val results = mutableListOf<MdlExchangeResult>()
-            val events = mutableListOf<MdlDiagnosticEvent>()
-            MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add), events::add)
+            val results = mutableListOf<CredentialExchangeResult>()
+            val events = mutableListOf<CredentialExchangeDiagnosticEvent>()
+            CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add), events::add)
             idle()
             if (errorFirst) provider.callback.onError(NoCredentialException())
             provider.succeed()
@@ -247,14 +265,14 @@ class MdlExchangeTest {
             provider.succeed()
             idle()
             assertEquals(!errorFirst, results.single().success)
-            assertEquals(1, events.count { it.stage == MdlExchangeStage.COMPLETED })
+            assertEquals(1, events.count { it.stage == CredentialExchangeStage.COMPLETED })
         }
     }
 
     @Test fun synchronousCallbackFollowedByProviderThrowOnlyCompletesOnce() {
         val provider = FakeProvider().apply { onGet = { succeed(); throw IllegalStateException() } }
-        val results = mutableListOf<MdlExchangeResult>()
-        MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add))
+        val results = mutableListOf<CredentialExchangeResult>()
+        CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add))
         idle()
         assertEquals(1, results.size)
     }
@@ -263,7 +281,7 @@ class MdlExchangeTest {
         val provider = FakeProvider()
         var completions = 0
         val failure = IllegalStateException("application failure")
-        MdlExchangeClient(provider).start(context, envelope(), Consumer {
+        CredentialExchangeClient(provider).start(context, envelope(), Consumer {
             completions++
             throw failure
         })
@@ -282,42 +300,42 @@ class MdlExchangeTest {
 
     @Test fun cancellingBeforeLaunchSkipsProviderAndCompletesOnce() {
         val provider = FakeProvider()
-        val results = mutableListOf<MdlExchangeResult>()
-        val call = MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add))
+        val results = mutableListOf<CredentialExchangeResult>()
+        val call = CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add))
         call.cancel()
         call.cancel()
         assertTrue(results.isEmpty())
         idle()
         assertEquals(0, provider.calls)
-        assertFailure(results.single(), MdlExchangeErrorType.CANCELLED)
+        assertFailure(results.single(), CredentialExchangeErrorType.CANCELLED)
     }
 
     @Test fun cancellingDuringRequestCancelsAndroidEvenWithoutProviderAcknowledgment() {
         val provider = FakeProvider()
-        val results = mutableListOf<MdlExchangeResult>()
-        val events = mutableListOf<MdlDiagnosticEvent>()
-        val call = MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add), events::add)
+        val results = mutableListOf<CredentialExchangeResult>()
+        val events = mutableListOf<CredentialExchangeDiagnosticEvent>()
+        val call = CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add), events::add)
         idle()
         val thread = Thread { call.cancel(); call.cancel() }
         thread.start()
         thread.join()
         idle()
         assertTrue(provider.signal.isCanceled)
-        assertFailure(results.single(), MdlExchangeErrorType.CANCELLED)
+        assertFailure(results.single(), CredentialExchangeErrorType.CANCELLED)
         assertEquals("exchange-123", results.single().exchangeId)
-        assertEquals(MdlExchangeErrorType.CANCELLED, events.last().errorType)
+        assertEquals(CredentialExchangeErrorType.CANCELLED, events.last().errorType)
         provider.succeed()
         provider.callback.onError(GetCredentialCancellationException())
         idle()
         assertEquals(1, results.size)
-        assertEquals(1, events.count { it.stage == MdlExchangeStage.COMPLETED })
+        assertEquals(1, events.count { it.stage == CredentialExchangeStage.COMPLETED })
     }
 
     @Test fun cancellationWinsOverQueuedResponseButIsNoOpAfterCompletion() {
         for (cancelBeforeDelivery in listOf(false, true)) {
             val provider = FakeProvider()
-            val results = mutableListOf<MdlExchangeResult>()
-            val call = MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add))
+            val results = mutableListOf<CredentialExchangeResult>()
+            val call = CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add))
             idle()
             provider.succeed()
             if (!cancelBeforeDelivery) idle()
@@ -330,55 +348,55 @@ class MdlExchangeTest {
 
     @Test fun faultyProviderCancellationCannotPreventCancelledCompletion() {
         val provider = FakeProvider()
-        val results = mutableListOf<MdlExchangeResult>()
+        val results = mutableListOf<CredentialExchangeResult>()
         val failure = IllegalStateException("provider cancellation failure")
-        val call = MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add))
+        val call = CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add))
         idle()
         provider.signal.setOnCancelListener { throw failure }
         call.cancel()
         idle()
-        assertFailure(results.single(), MdlExchangeErrorType.CANCELLED)
+        assertFailure(results.single(), CredentialExchangeErrorType.CANCELLED)
         assertSame(failure, results.single().error!!.suppressed.single())
     }
 
     @Test fun diagnosticListenerCanCancelBeforeProviderLaunch() {
         val provider = FakeProvider()
-        val results = mutableListOf<MdlExchangeResult>()
-        lateinit var call: MdlExchangeCall
-        call = MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add)) {
-            if (it.stage == MdlExchangeStage.REQUESTING_CREDENTIAL) call.cancel()
+        val results = mutableListOf<CredentialExchangeResult>()
+        lateinit var call: CredentialExchangeCall
+        call = CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add)) {
+            if (it.stage == CredentialExchangeStage.REQUESTING_CREDENTIAL) call.cancel()
         }
         idle()
         assertEquals(0, provider.calls)
-        assertFailure(results.single(), MdlExchangeErrorType.CANCELLED)
+        assertFailure(results.single(), CredentialExchangeErrorType.CANCELLED)
     }
 
     @Test fun coroutineReturnsResultForSuccessAndWalletDismissal() = runTest {
         for (dismissed in listOf(false, true)) {
             val provider = FakeProvider()
-            val deferred = async { MdlExchangeClient(provider).await(context, envelope()) }
+            val deferred = async { CredentialExchangeClient(provider).await(context, envelope()) }
             runCurrent()
             idle()
             if (dismissed) provider.callback.onError(GetCredentialCancellationException()) else provider.succeed()
             idle()
             runCurrent()
-            if (dismissed) assertFailure(deferred.await(), MdlExchangeErrorType.CANCELLED)
+            if (dismissed) assertFailure(deferred.await(), CredentialExchangeErrorType.CANCELLED)
             else assertTrue(deferred.await().success)
         }
     }
 
     @Test fun publicSuspendingApiReturnsInvalidChallenge() = runTest {
-        val deferred = async { TrinsicMdl.awaitMdlExchange(context, "bad") }
+        val deferred = async { TrinsicCredentials.awaitCredentialExchange(context, "bad") }
         runCurrent()
         idle()
         runCurrent()
-        assertFailure(deferred.await(), MdlExchangeErrorType.INVALID_CHALLENGE)
+        assertFailure(deferred.await(), CredentialExchangeErrorType.INVALID_CHALLENGE)
     }
 
     @Test fun coroutineCancellationPropagatesAndIgnoresLateCallbacks() = runTest {
         val provider = FakeProvider()
-        val events = mutableListOf<MdlDiagnosticEvent>()
-        val deferred = async { MdlExchangeClient(provider).await(context, envelope(), events::add) }
+        val events = mutableListOf<CredentialExchangeDiagnosticEvent>()
+        val deferred = async { CredentialExchangeClient(provider).await(context, envelope(), events::add) }
         runCurrent()
         idle()
         deferred.cancel()
@@ -394,13 +412,13 @@ class MdlExchangeTest {
         provider.callback.onError(GetCredentialUnknownException())
         idle()
         runCurrent()
-        assertEquals(1, events.count { it.stage == MdlExchangeStage.COMPLETED })
-        assertEquals(MdlExchangeErrorType.CANCELLED, events.last().errorType)
+        assertEquals(1, events.count { it.stage == CredentialExchangeStage.COMPLETED })
+        assertEquals(CredentialExchangeErrorType.CANCELLED, events.last().errorType)
     }
 
     @Test fun coroutineCancellationBeforeAndroidLaunchSkipsProvider() = runTest {
         val provider = FakeProvider()
-        val deferred = async { MdlExchangeClient(provider).await(context, envelope()) }
+        val deferred = async { CredentialExchangeClient(provider).await(context, envelope()) }
         runCurrent()
         deferred.cancel()
         runCurrent()
@@ -411,7 +429,7 @@ class MdlExchangeTest {
 
     @Test fun coroutineHasPromptCancellationAfterResponseBeforeResumption() = runTest {
         val provider = FakeProvider()
-        val deferred = async { MdlExchangeClient(provider).await(context, envelope()) }
+        val deferred = async { CredentialExchangeClient(provider).await(context, envelope()) }
         runCurrent()
         idle()
         provider.succeed()
@@ -424,9 +442,9 @@ class MdlExchangeTest {
 
     @Test fun diagnosticsAreOrderedMetadataOnlyAndListenerFailureIsIsolated() {
         val provider = FakeProvider()
-        val events = mutableListOf<MdlDiagnosticEvent>()
-        val results = mutableListOf<MdlExchangeResult>()
-        MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add)) {
+        val events = mutableListOf<CredentialExchangeDiagnosticEvent>()
+        val results = mutableListOf<CredentialExchangeResult>()
+        CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add)) {
             assertEquals(Looper.getMainLooper(), Looper.myLooper())
             events.add(it)
             throw IllegalStateException("observer failure")
@@ -435,30 +453,30 @@ class MdlExchangeTest {
         provider.succeed("""{"token":"private-credential"}""")
         idle()
         assertTrue(results.single().success)
-        assertEquals(listOf(MdlExchangeStage.VALIDATING_REQUEST, MdlExchangeStage.REQUESTING_CREDENTIAL,
-            MdlExchangeStage.ENCODING_RESPONSE, MdlExchangeStage.COMPLETED), events.map { it.stage })
+        assertEquals(listOf(CredentialExchangeStage.VALIDATING_REQUEST, CredentialExchangeStage.REQUESTING_CREDENTIAL,
+            CredentialExchangeStage.ENCODING_RESPONSE, CredentialExchangeStage.COMPLETED), events.map { it.stage })
         assertNull(events.first().exchangeId)
         assertTrue(events.drop(1).all { it.exchangeId == "exchange-123" })
         assertTrue(events.all { it.sdkVersion == BuildConfig.SDK_VERSION && it.errorType == null })
         assertEquals(setOf("stage", "exchangeId", "sdkVersion", "errorType"),
-            MdlDiagnosticEvent::class.java.declaredFields
+            CredentialExchangeDiagnosticEvent::class.java.declaredFields
                 .filterNot { it.isSynthetic || Modifier.isStatic(it.modifiers) }.map { it.name }.toSet())
     }
 
     @Test fun diagnosticsNeverReceiveProviderMessageOrCause() {
         val provider = FakeProvider()
-        val events = mutableListOf<MdlDiagnosticEvent>()
-        val results = mutableListOf<MdlExchangeResult>()
-        MdlExchangeClient(provider).start(context, envelope(), Consumer(results::add), events::add)
+        val events = mutableListOf<CredentialExchangeDiagnosticEvent>()
+        val results = mutableListOf<CredentialExchangeResult>()
+        CredentialExchangeClient(provider).start(context, envelope(), Consumer(results::add), events::add)
         idle()
         provider.callback.onError(GetCredentialUnknownException("secret-provider-token"))
         idle()
-        assertEquals(MdlExchangeErrorType.PROVIDER_FAILURE, events.last().errorType)
+        assertEquals(CredentialExchangeErrorType.PROVIDER_FAILURE, events.last().errorType)
         assertFalse(events.joinToString().contains("secret-provider-token"))
         assertEquals("secret-provider-token", results.single().error!!.cause!!.message)
     }
 
-    private fun assertFailure(result: MdlExchangeResult, type: MdlExchangeErrorType) {
+    private fun assertFailure(result: CredentialExchangeResult, type: CredentialExchangeErrorType) {
         assertFalse(result.success)
         assertNull(result.token)
         assertEquals(type, result.error!!.errorType)
@@ -469,7 +487,7 @@ class MdlExchangeTest {
 
     private fun outer(inner: String = "{}") = JSONObject()
         .put("exchangeId", "exchange-123")
-        .put("type", "mdlRequest")
+        .put("type", "credentialRequest")
         .put("platform", "google-wallet")
         .put("exchangeMechanism", "NativeApp")
         .put("requestObject", inner)
@@ -479,7 +497,7 @@ class MdlExchangeTest {
     private fun versioned(request: JSONObject) = encode(JSONObject().put("v1", request).toString())
     private fun encode(value: String) = Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))
 
-    private class FakeProvider : MdlCredentialProvider {
+    private class FakeProvider : DigitalCredentialProvider {
         var calls = 0
         lateinit var request: GetCredentialRequest
         lateinit var signal: CancellationSignal
