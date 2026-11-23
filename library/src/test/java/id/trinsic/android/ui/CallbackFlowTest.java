@@ -38,19 +38,20 @@ public class CallbackFlowTest {
     private static final String LAUNCH = "https://verify.trinsic.id/?sessionId=123";
     private static final String CLIENT_TOKEN_LAUNCH = "https://verify.trinsic.id/api/session/launch?clientToken=example-token";
     private static final String FULL_CALLBACK = CALLBACK
-            + "?sessionId=123&redirectToken=a%2Bb%2fc&resultsAccessKey=legacy&success=false&extra=x%20y#complete";
+            + "?sessionId=123&redirectToken=a%2Bb%2fc&redirectReason=test%20reason&resultsAccessKey=legacy&success=false&extra=x%20y#complete";
     private static final String[] LAUNCH_URLS = {
             LAUNCH, CLIENT_TOKEN_LAUNCH, "https://verify.trinsic.id/",
             "https://verify.trinsic.id/?sessionId=&sessionId=ignored&launchMode=web&launchMode=&clientToken=a%2Bb%2fc+d#fragment"
     };
     private static final String[][] OPTIONAL_CALLBACK_FIELDS = {
-            {CALLBACK, null, null},
-            {CALLBACK + "?sessionId=&redirectToken=", null, null},
-            {CALLBACK + "?sessionId&redirectToken", null, null},
-            {CALLBACK + "?redirectToken=token", null, "token"},
-            {CALLBACK + "?sessionId=123", "123", null},
-            {CALLBACK + "?sessionId=&redirectToken=token", null, "token"},
-            {CALLBACK + "?sessionId=123&redirectToken=", "123", null}
+            {CALLBACK, null, null, null},
+            {CALLBACK + "?sessionId=&redirectToken=&redirectReason=", null, null, null},
+            {CALLBACK + "?sessionId&redirectToken&redirectReason", null, null, null},
+            {CALLBACK + "?redirectToken=token", null, "token", null},
+            {CALLBACK + "?redirectReason=test%20reason", null, null, "test reason"},
+            {CALLBACK + "?sessionId=123", "123", null, null},
+            {CALLBACK + "?sessionId=&redirectToken=token", null, "token", null},
+            {CALLBACK + "?sessionId=123&redirectToken=", "123", null, null}
     };
 
     private Intent invocation() {
@@ -164,6 +165,7 @@ public class CallbackFlowTest {
         assertEquals(values[0], result.getCallbackUrl());
         assertEquals(values[1], result.getSessionId());
         assertEquals(values[2], result.getRedirectToken());
+        assertEquals(values[3], result.getRedirectReason());
         assertFalse(result.getCanceled());
     }
 
@@ -179,7 +181,7 @@ public class CallbackFlowTest {
                 ShadowActivity shadow = shadowOf(controller.get());
                 hostShadow.receiveResult(launch, shadow.getResultCode(), shadow.getResultIntent());
                 assertEquals(1, host.get().resultCount);
-                assertCallbackFields(host.get().result, new String[] {FULL_CALLBACK, "123", "a+b/c"});
+                assertCallbackFields(host.get().result, new String[] {FULL_CALLBACK, "123", "a+b/c", "test reason"});
             }
         }
     }
@@ -199,7 +201,7 @@ public class CallbackFlowTest {
                     controller.newIntent(callback(FULL_CALLBACK));
                     shadowOf(Looper.getMainLooper()).idle();
                     assertEquals(1, ResultReceiver.count.get());
-                    assertCallbackFields(ResultReceiver.result, new String[] {FULL_CALLBACK, "123", "a+b/c"});
+                    assertCallbackFields(ResultReceiver.result, new String[] {FULL_CALLBACK, "123", "a+b/c", "test reason"});
                 }
             } finally {
                 host.get().unregisterReceiver(receiver);
@@ -224,7 +226,7 @@ public class CallbackFlowTest {
             controller.newIntent(callback(callbackUrl));
             assertEquals(Activity.RESULT_OK, shadow.getResultCode());
             assertCallbackFields(TrinsicPendingIntentHelper.GetAcceptanceSessionResult(shadow.getResultIntent()),
-                    new String[] {callbackUrl, "session/123+abc", null});
+                    new String[] {callbackUrl, "session/123+abc", null, null});
         }
     }
 
@@ -241,6 +243,7 @@ public class CallbackFlowTest {
                 AcceptanceSessionResult restored = AcceptanceSessionResult.CREATOR.createFromParcel(parcel);
                 assertEquals(original.getSessionId(), restored.getSessionId());
                 assertEquals(original.getRedirectToken(), restored.getRedirectToken());
+                assertEquals(original.getRedirectReason(), restored.getRedirectReason());
                 assertEquals(original.getCallbackUrl(), restored.getCallbackUrl());
                 assertEquals(original.getCanceled(), restored.getCanceled());
             } finally {
@@ -340,6 +343,7 @@ public class CallbackFlowTest {
             assertTrue(result.getCanceled());
             assertEquals("123", result.getSessionId());
             assertNull(result.getRedirectToken());
+            assertNull(result.getRedirectReason());
             assertNull(result.getCallbackUrl());
         }
     }

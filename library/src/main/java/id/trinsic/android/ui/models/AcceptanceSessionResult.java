@@ -1,5 +1,6 @@
 package id.trinsic.android.ui.models;
 
+import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
 
@@ -56,6 +57,8 @@ public class AcceptanceSessionResult implements Parcelable {
      * When the launch URL contains a non-empty {@code sessionId}, the callback must return the same ID.
      * On browser cancellation, this is the Session ID from the launch URL, if available.
      * Null when the relevant URL omits the ID or supplies an empty value.
+     * If you rely on this callback field beyond Trinsic's obsoletion period, prefer parsing the full
+     * callback URL from {@link #getCallbackUrl()} on your backend.
      */
     @Nullable
     public String getSessionId() {
@@ -63,11 +66,26 @@ public class AcceptanceSessionResult implements Parcelable {
     }
 
     /**
-     * The `redirectToken` from the completion callback.
+     * The {@code redirectToken} from the completion callback.
      * Null when absent or empty, or when the user closes the browser before a callback arrives.
+     * If you rely on this field beyond Trinsic's obsoletion period, prefer parsing the full
+     * callback URL from {@link #getCallbackUrl()} on your backend.
      */
     @Nullable
     public String getRedirectToken() { return redirectToken; }
+
+    /**
+     * The optional {@code redirectReason} query parameter from the completion callback.
+     * Returns null when the parameter is absent or empty, or when no callback URL was received.
+     * If you rely on this field beyond Trinsic's obsoletion period, prefer parsing the full
+     * callback URL from {@link #getCallbackUrl()} on your backend.
+     */
+    @Nullable
+    public String getRedirectReason() {
+        if (callbackUrl == null) return null;
+        Uri uri = Uri.parse(callbackUrl);
+        return uri.isHierarchical() ? nullIfEmpty(uri.getQueryParameter("redirectReason")) : null;
+    }
 
     /**
      * The full completion callback URL, preserved as received, including its query and fragment.
@@ -87,6 +105,9 @@ public class AcceptanceSessionResult implements Parcelable {
      * This only has a value of `true` if the user canceled the Session using an Android OS feature which immediately
      * ended the Android Custom Tab session, such as the back button. In this case, Trinsic's backend never
      * receives notification that the Session has been canceled; therefore, the Session will not transition to the canceled state on the Trinsic platform.
+     * <p>
+     * If you rely on redirect details beyond Trinsic's obsoletion period, prefer parsing the full
+     * callback URL from {@link #getCallbackUrl()} on your backend when one is received.
      */
     public boolean getCanceled() {
         return canceled;
