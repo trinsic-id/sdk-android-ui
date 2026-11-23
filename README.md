@@ -161,6 +161,7 @@ protected void onCreate(Bundle savedInstanceState) {
         // This callback will be called when a launched Session completes or is canceled by the user
         String sessionId = result.getSessionId();
         String redirectToken = result.getRedirectToken();
+        String redirectReason = result.getRedirectReason();
         String callbackUrl = result.getCallbackUrl();
         boolean canceled = result.getCanceled();
         
@@ -195,6 +196,7 @@ public final class TrinsicResultReceiver extends BroadcastReceiver {
         if (result != null) {
             String sessionId = result.getSessionId();
             String redirectToken = result.getRedirectToken();
+            String redirectReason = result.getRedirectReason();
             String callbackUrl = result.getCallbackUrl();
             boolean canceled = result.getCanceled();
             
@@ -275,7 +277,7 @@ The `launchUrl` parameter on both launch APIs should contain a non-empty `sessio
 
 Launch URLs without a non-empty `sessionId` remain supported, including `clientToken` URLs. In that case, the SDK cannot match the callback to the launched Session; it takes the ID from the callback, or returns `null` if that ID is missing or empty. Retain the separately returned `sessionId` in your app/backend to correlate and verify results.
 
-Both APIs return an `AcceptanceSessionResult` with `sessionId`, `redirectToken`, `callbackUrl`, and `canceled`. Accepted completion callbacks return their `sessionId` and `redirectToken`, with missing or empty values represented as `null`. `callbackUrl` contains the complete callback URL as received, including all query parameters and any fragment. Browser cancellation returns `canceled=true`, the launch URL's Session ID when known (otherwise `null`), and `null` for `redirectToken` and `callbackUrl`. The deprecated `resultsAccessKey` and `success` properties have been removed; use your backend to determine the Session's outcome.
+Both APIs return an `AcceptanceSessionResult` with `sessionId`, `redirectToken`, `redirectReason`, `callbackUrl`, and `canceled`. Accepted completion callbacks return their `sessionId`, `redirectToken`, and optional `redirectReason`, with missing or empty values represented as `null`. `callbackUrl` contains the complete callback URL as received, including all query parameters and any fragment. If you rely on individual callback fields beyond Trinsic's obsoletion period, prefer parsing this URL on your backend. Browser cancellation returns `canceled=true`, the launch URL's Session ID when known (otherwise `null`), and `null` for `redirectToken`, `redirectReason`, and `callbackUrl`. The deprecated `resultsAccessKey` and `success` properties have been removed; use your backend to determine the Session's outcome.
 
 Active invocation state, the launch Session ID, and pending cancellation are retained when Android recreates the activity. A callback opened without a pending SDK invocation cannot resume a lost flow; your app must persist pending verification state and recover through your backend. `InvokeActivity` is internal and no longer exported; external links must target `CallbackActivity`.
 
